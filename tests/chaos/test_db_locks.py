@@ -1,16 +1,19 @@
-import pytest
-pytestmark = pytest.mark.chaos
 import asyncio
+
 import aiosqlite
-from shared_memory.infra.database import retry_on_db_lock, async_get_connection
+import pytest
+
+from shared_memory.infra.database import retry_on_db_lock
+
+pytestmark = pytest.mark.chaos
 
 @pytest.mark.asyncio
 async def test_db_lock_retry_chaos():
     """
     Chaos Test: Force a DB lock and verify that retry_on_db_lock handles it.
     """
-    import tempfile
     import os
+    import tempfile
     
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "chaos.db")
@@ -52,7 +55,10 @@ async def test_ai_outage_graceful_degradation(monkeypatch, db_conn):
     from shared_memory.core.search import perform_search
     
     # Setup data
-    await db_conn.execute("INSERT INTO entities (name, entity_type, description) VALUES ('FallbackItem', 'test', 'Keyword match only')")
+    await db_conn.execute(
+        "INSERT INTO entities (name, entity_type, description) "
+        "VALUES ('FallbackItem', 'test', 'Keyword match only')"
+    )
     await db_conn.commit()
     
     # Mock AI to fail

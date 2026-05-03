@@ -69,7 +69,7 @@ async def perform_keyword_search(query: str, limit: int = 5, exclude_session_id:
                 # Fallback to a simpler LIKE if FTS fails for some reason
                 cursor = await conn.execute(
                     f"SELECT {id_col}, {content_col} FROM {source_name} "
-                    f"WHERE {content_col} LIKE ? OR {id_col} LIKE ? AND status = 'active'",
+                    f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?) AND status = 'active'",
                     (f"%{query}%", f"%{query}%")
                 )
                 for row_id, content in await cursor.fetchall():
@@ -94,7 +94,8 @@ async def perform_keyword_search(query: str, limit: int = 5, exclude_session_id:
             async with await async_get_thoughts_connection() as t_conn:
                 t_cursor = await t_conn.execute(
                     "SELECT session_id, thought_number, thought, bm25(thought_history_fts) "
-                    "FROM thought_history_fts WHERE thought_history_fts MATCH ? AND session_id != ?",
+                    "FROM thought_history_fts WHERE thought_history_fts MATCH ? "
+                    "AND session_id != ?",
                     (query, exclude_session_id or ""),
                 )
                 for sess_id, t_num, thought, rank in await t_cursor.fetchall():

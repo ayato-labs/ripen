@@ -1,16 +1,12 @@
-
+import asyncio
+import json
 import os
 import sys
 import time
-import asyncio
-import json
-import uvicorn
-from typing import Any, Sequence
-from datetime import datetime
-from starlette.applications import Starlette
-from starlette.requests import Request
+from typing import Any
 
-# Import common utils first to configure logging
+from starlette.applications import Starlette
+
 from shared_memory.common.utils import configure_logging, get_logger
 
 # --- EXTREME GUARD: STDOUT REDIRECTION ---
@@ -25,17 +21,20 @@ logger.info("--- SERVER SCRIPT STARTING (Extreme Guard Mode) ---")
 # Import core modules with verified paths
 logger.info("Importing core submodules...")
 try:
-    from shared_memory.core import logic as logic_module
-    from shared_memory.core import thought_logic as thought_module
-    from shared_memory.core import graph as graph_module
+    from shared_memory.core import (
+        graph as graph_module,
+        logic as logic_module,
+        thought_logic as thought_module,
+    )
     from shared_memory.infra.database import init_db
     logger.info("Core submodules imported successfully")
-except Exception as e:
+except Exception:
     logger.exception("Import failure")
     sys.exit(1)
 
 # --- MCP PROTOCOL PATCH: PERMISSIVE HANDSHAKE ---
-from mcp.server.session import ServerSession, InitializationState
+from mcp.server.session import InitializationState, ServerSession
+
 _original_received_request = ServerSession._received_request
 
 async def _permissive_received_request(self, responder):
@@ -77,13 +76,14 @@ logger.info("MCP Protocol Patch: ServerSession._received_request is now PERMISSI
 import mcp.shared.session as mcp_session
 from mcp.shared.message import SessionMessage
 from mcp.types import (
-    JSONRPCRequest,
-    JSONRPCNotification,
-    JSONRPCMessage,
-    JSONRPCError,
-    ErrorData,
     INVALID_PARAMS,
+    ErrorData,
+    JSONRPCError,
+    JSONRPCMessage,
+    JSONRPCNotification,
+    JSONRPCRequest,
 )
+
 
 def _sanitize_mcp_dict(d: Any) -> Any:
     if isinstance(d, dict):
@@ -98,8 +98,8 @@ def _sanitize_mcp_dict(d: Any) -> Any:
     return d
 
 async def _permissive_session_receive_loop(self):
-    from mcp.shared.session import RequestResponder
     import anyio
+    from mcp.shared.session import RequestResponder
     
     log_path = "scratch/protocol_log.jsonl"
     os.makedirs("scratch", exist_ok=True)
@@ -183,13 +183,14 @@ async def _permissive_session_receive_loop(self):
                     await self._handle_response(message)
         except anyio.ClosedResourceError:
             pass
-        except Exception as e:
+        except Exception:
             logger.exception("[MCP PATCH] Unhandled exception")
 
 mcp_session.BaseSession._receive_loop = _permissive_session_receive_loop
 
 # --- FastMCP Patch ---
 from mcp.server.fastmcp import FastMCP
+
 _original_sse_app = FastMCP.sse_app
 
 def _patched_sse_app(self, mount_path: str | None = None) -> Starlette:
@@ -201,10 +202,11 @@ FastMCP.sse_app = _patched_sse_app
 
 # Patch SseServerTransport to log POST messages
 from mcp.server.sse import SseServerTransport
+
 _original_handle_post = SseServerTransport.handle_post_message
 
 async def _patched_handle_post(self, scope, receive, send):
-    from starlette.requests import Request
+    # from starlette.requests import Request (Unused)
     # We can peek at the scope for query params without consuming the body
     query_string = scope.get("query_string", b"").decode()
     session_id = None
@@ -222,7 +224,9 @@ async def _patched_handle_post(self, scope, receive, send):
 
 SseServerTransport.handle_post_message = _patched_handle_post
 
+
 from contextlib import asynccontextmanager
+
 
 @asynccontextmanager
 async def lifespan(app: FastMCP):

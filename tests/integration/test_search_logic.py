@@ -1,7 +1,10 @@
+from unittest.mock import AsyncMock
+
 import pytest
-pytestmark = pytest.mark.integration
-from unittest.mock import MagicMock, AsyncMock
+
 from shared_memory.core.search import perform_search
+
+pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_hybrid_search_with_tags_and_heat(monkeypatch, db_conn):
@@ -67,5 +70,7 @@ async def test_hybrid_search_with_tags_and_heat(monkeypatch, db_conn):
     assert "ItemC" in results
     
     # Verify access count update
-    cursor = await db_conn.execute("SELECT access_count FROM knowledge_metadata WHERE content_id = 'ItemA'")
+    cursor = await db_conn.execute(
+        "SELECT access_count FROM knowledge_metadata WHERE content_id = 'ItemA'"
+    )
     assert (await cursor.fetchone())[0] == 1

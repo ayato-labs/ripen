@@ -114,7 +114,8 @@ async def auto_distill_knowledge(session_id: str, thought_history: list[dict[str
         )
 
     except Exception as e:
-        logger.exception("Failed to distill knowledge for session {session_id}", session_id=session_id)
+        logger.exception("Failed to distill knowledge for session {session_id}", 
+                         session_id=session_id)
         log_error(f"Failed to distill knowledge for session {session_id}", e)
         # Note: We don't re-raise here to avoid crashing the thought process
         # because distillation is a background/secondary task.
