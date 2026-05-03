@@ -114,7 +114,7 @@ class AsyncSQLiteConnection:
                             await _MAIN_CONNECTION.execute("PRAGMA synchronous = NORMAL")
                             await _MAIN_CONNECTION.execute("PRAGMA cache_size = -2000")
                             logger.info("Main connection successfully established and configured.")
-                        except Exception as e:
+                        except Exception:
                             logger.exception("CRITICAL: Failed to establish main DB connection")
                             raise
                     self.conn = _MAIN_CONNECTION
@@ -289,7 +289,7 @@ async def init_db(force: bool = False):
                 )
             """)
             logger.info("Core tables (entities, relations, observations, bank_files) verified.")
-        except Exception as e:
+        except Exception:
             logger.exception("CRITICAL: Failed to create/verify core tables")
             raise
         await cursor.execute("""
@@ -433,13 +433,16 @@ async def init_db(force: bool = False):
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
-                INSERT INTO entities_fts(entities_fts, rowid, name, description) VALUES('delete', old.rowid, old.name, old.description);
+                INSERT INTO entities_fts(entities_fts, rowid, name, description) 
+                VALUES('delete', old.rowid, old.name, old.description);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
-                INSERT INTO entities_fts(entities_fts, rowid, name, description) VALUES('delete', old.rowid, old.name, old.description);
-                INSERT INTO entities_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+                INSERT INTO entities_fts(entities_fts, rowid, name, description) 
+                VALUES('delete', old.rowid, old.name, old.description);
+                INSERT INTO entities_fts(rowid, name, description) 
+                VALUES (new.rowid, new.name, new.description);
             END;
         """)
 
@@ -451,13 +454,16 @@ async def init_db(force: bool = False):
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-                INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) VALUES('delete', old.id, old.entity_name, old.content);
+                INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
+                VALUES('delete', old.id, old.entity_name, old.content);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-                INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) VALUES('delete', old.id, old.entity_name, old.content);
-                INSERT INTO observations_fts(rowid, entity_name, content) VALUES (new.id, new.entity_name, new.content);
+                INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
+                VALUES('delete', old.id, old.entity_name, old.content);
+                INSERT INTO observations_fts(rowid, entity_name, content) 
+                VALUES (new.id, new.entity_name, new.content);
             END;
         """)
 
@@ -469,13 +475,16 @@ async def init_db(force: bool = False):
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS bank_files_ad AFTER DELETE ON bank_files BEGIN
-                INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) VALUES('delete', old.rowid, old.filename, old.content);
+                INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
+                VALUES('delete', old.rowid, old.filename, old.content);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS bank_files_au AFTER UPDATE ON bank_files BEGIN
-                INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) VALUES('delete', old.rowid, old.filename, old.content);
-                INSERT INTO bank_files_fts(rowid, filename, content) VALUES (new.rowid, new.filename, new.content);
+                INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
+                VALUES('delete', old.rowid, old.filename, old.content);
+                INSERT INTO bank_files_fts(rowid, filename, content) 
+                VALUES (new.rowid, new.filename, new.content);
             END;
         """)
 

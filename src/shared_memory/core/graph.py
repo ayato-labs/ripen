@@ -6,7 +6,11 @@ from datetime import datetime
 from typing import Any
 
 from shared_memory.common.config import settings
-from shared_memory.common.utils import get_logger, log_error, mask_sensitive_data
+from shared_memory.common.utils import (
+    get_logger,
+    log_error,
+    mask_sensitive_data,
+)
 from shared_memory.core.ai_control import AIRateLimiter
 from shared_memory.infra.database import async_get_connection
 from shared_memory.infra.embeddings import (
@@ -16,15 +20,16 @@ from shared_memory.infra.embeddings import (
 
 logger = get_logger("graph")
 
-# Common English stopwords to improve logic-based extraction
 STOP_WORDS = {
-    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "by", "for", "with",
+    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
+    "at", "by", "for", "with",
     "is", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did",
     "i", "you", "he", "she", "it", "we", "they", "my", "your", "his", "her", "its", "our", "their",
     "this", "that", "these", "those", "which", "who", "whom", "whose", "where", "how", "why",
     "can", "could", "shall", "should", "will", "would", "may", "might", "must",
     "in", "on", "to", "from", "up", "down", "out", "of", "about", "above", "below", "between",
-    "currently", "named", "using", "through", "during", "actually", "basically", "simply"
+    "currently", "named", "using", "through", "during", "actually", 
+    "basically", "simply"
 }
 
 

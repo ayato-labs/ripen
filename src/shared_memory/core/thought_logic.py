@@ -92,13 +92,15 @@ async def init_thoughts_db(force: bool = False):
         """)
         await conn.execute("""
             CREATE TRIGGER IF NOT EXISTS thought_history_ad AFTER DELETE ON thought_history BEGIN
-                INSERT INTO thought_history_fts(thought_history_fts, rowid, session_id, thought_number, thought) 
+                INSERT INTO thought_history_fts(thought_history_fts, rowid, 
+                                                session_id, thought_number, thought) 
                 VALUES('delete', old.id, old.session_id, old.thought_number, old.thought);
             END;
         """)
         await conn.execute("""
             CREATE TRIGGER IF NOT EXISTS thought_history_au AFTER UPDATE ON thought_history BEGIN
-                INSERT INTO thought_history_fts(thought_history_fts, rowid, session_id, thought_number, thought) 
+                INSERT INTO thought_history_fts(thought_history_fts, rowid, 
+                                                session_id, thought_number, thought) 
                 VALUES('delete', old.id, old.session_id, old.thought_number, old.thought);
                 INSERT INTO thought_history_fts(rowid, session_id, thought_number, thought) 
                 VALUES (new.id, new.session_id, new.thought_number, new.thought);

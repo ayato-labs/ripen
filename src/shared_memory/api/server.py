@@ -30,7 +30,7 @@ try:
     from shared_memory.core import graph as graph_module
     from shared_memory.infra.database import init_db
     logger.info("Core submodules imported successfully")
-except Exception as e:
+except Exception:
     logger.exception("Import failure")
     sys.exit(1)
 
@@ -183,7 +183,7 @@ async def _permissive_session_receive_loop(self):
                     await self._handle_response(message)
         except anyio.ClosedResourceError:
             pass
-        except Exception as e:
+        except Exception:
             logger.exception("[MCP PATCH] Unhandled exception")
 
 mcp_session.BaseSession._receive_loop = _permissive_session_receive_loop
