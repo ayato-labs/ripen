@@ -1,8 +1,0 @@
-pre-commit:
-  commands:
-    ruff-check:
-      glob: "*.py"
-      run: ruff check {staged_files}
-    ruff-format:
-      glob: "*.py"
-      run: ruff format --check {staged_files}
