@@ -1,172 +1,623 @@
 import json
-import os
-import sqlite3
-import aiosqlite
-from datetime import datetime, UTC
-from typing import Dict, Any, List, Optional
-from shared_memory.common.utils import get_db_path, log_info, log_error, get_logger, calculate_importance
-from shared_memory.common.config import MAX_OBSERVATIONS_PER_ENTITY, GLOBAL_READ_ENTITY_LIMIT
+import re
+from collections import Counter
+from datetime import datetime
+from typing import Any
+
+from shared_memory.common.config import settings
+from shared_memory.common.utils import (
+    get_logger,
+    log_error,
+    mask_sensitive_data,
+)
+from shared_memory.core.ai_control import AIRateLimiter, retry_on_ai_quota
+from shared_memory.infra.database import async_get_connection
+from shared_memory.infra.embeddings import (
+    compute_embeddings_bulk,
+    get_gemini_client,
+)
 
 logger = get_logger("graph")
 
-async def get_graph_data(query: str | None = None) -> Dict[str, Any]:
-    \"\"\"
-    Retrieves knowledge entities and their relations from the SQLite database.
+STOP_WORDS = {
+    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
+    "at", "by", "for", "with",
+    "is", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did",
+    "i", "you", "he", "she", "it", "we", "they", "my", "your", "his", "her", "its", "our", "their",
+    "this", "that", "these", "those", "which", "who", "whom", "whose", "where", "how", "why",
+    "can", "could", "shall", "should", "will", "would", "may", "might", "must",
+    "in", "on", "to", "from", "up", "down", "out", "of", "about", "above", "below", "between",
+    "currently", "named", "using", "through", "during", "actually", 
+    "basically", "simply"
+}
+
+
+async def extract_hashtags(content: str) -> list[str]:
+    """
+    Extracts up to 5 relevant hashtags from the content.
+    Uses lightweight logic for short text and AI for longer text to optimize performance.
+    """
+    if not content or len(content) < 10:
+        return []
+
+    # Choose strategy based on length
+    if len(content) < settings.hashtag_ai_threshold:
+        return extract_hashtags_logic(content)
     
-    If a query is provided, it performs a search and returns related entities.
-    If no query is provided, it returns a limited set of high-importance entities
-    to avoid overloading the context.
-    \"\"\"
-    db_path = get_db_path()
-    if not os.path.exists(db_path):
-        return {"entities": [], "relations": [], "observations": []}
+    return await extract_hashtags_ai(content)
+
+
+def extract_hashtags_logic(content: str, max_tags: int = 5) -> list[str]:
+    """
+    Lightweight keyword extraction using word frequency and stopword filtering.
+    """
+    # 1. Clean and tokenize (alphanumeric only)
+    words = re.findall(r"\w+", content.lower())
+
+    # 2. Filter: length > 3, not a stopword, not purely numeric
+    filtered = [
+        w for w in words
+        if len(w) > 3 and w not in STOP_WORDS and not w.isdigit()
+    ]
+
+    # 3. Frequency count
+    counts = Counter(filtered)
+
+    # 4. Return top N as normalized hashtags
+    return [f"#{word}" for word, _ in counts.most_common(max_tags)]
+
+
+@retry_on_ai_quota()
+async def extract_hashtags_ai(content: str) -> list[str]:
+    """
+    Extracts up to 5 thematic hashtags using AI.
+    """
+    if not content or len(content) < 10:
+        return []
+
+    client = get_gemini_client()
+    if not client:
+        return []
+
+    prompt = (
+        "Extract up to 5 highly relevant keywords or hashtags from the following text. "
+        "Normalize them to lowercase and remove spaces within tags. "
+        "Output MUST be a JSON list of strings (e.g. ['#python', '#mcp']).\n\n"
+        f"TEXT:\n{content}"
+    )
+
+    await AIRateLimiter.throttle()
+    response = await client.aio.models.generate_content(
+        model=settings.generative_model,
+        contents=prompt,
+        config={"response_mime_type": "application/json"},
+    )
+    tags = json.loads(response.text)
+    if isinstance(tags, list):
+        # Clean and normalize tags
+        cleaned = []
+        for t_raw in tags:
+            # Normalize: lowercase, ensure starts with #, no spaces
+            t_clean = str(t_raw).strip().lower().replace(" ", "")
+            if not t_clean.startswith("#"):
+                t_clean = f"#{t_clean}"
+            if len(t_clean) > 1:
+                cleaned.append(t_clean)
+        return cleaned[:5]
+    return []
+
+
+async def save_tags(content_id: str, content_type: str, tags: list[str], conn) -> None:
+    """
+    Saves tags for a piece of knowledge in the tags table.
+    Deletes existing tags for the content first to ensure a clean refresh.
+    """
+    if not tags:
+        return
 
     try:
-        async with aiosqlite.connect(db_path) as conn:
-            conn.row_factory = aiosqlite.Row
-            
-            entities = []
-            relations = []
-            observations = []
+        # 1. Delete old tags
+        await conn.execute(
+            "DELETE FROM tags WHERE content_id = ? AND content_type = ?",
+            (content_id, content_type)
+        )
+        # 2. Insert new tags
+        data = [(t, content_id, content_type) for t in tags]
+        await conn.executemany(
+            "INSERT OR IGNORE INTO tags (tag, content_id, content_type) VALUES (?, ?, ?)",
+            data
+        )
+    except Exception as e:
+        logger.error(f"Failed to save tags for {content_id}: {e}")
 
-            # 1. Entity Retrieval
-            if query:
-                # Search for specific entities
-                cursor = await conn.execute(
-                    \"\"\"
-                    SELECT name, entity_type, description, importance 
-                    FROM entities 
-                    WHERE (name LIKE ? OR description LIKE ?) 
-                    AND status = 'active'
-                    LIMIT ?
-                    \"\"\",
-                    (f"%{query}%", f"%{query}%", GLOBAL_READ_ENTITY_LIMIT)
-                )
-            else:
-                # Default view: High importance active entities
-                cursor = await conn.execute(
-                    \"\"\"
-                    SELECT name, entity_type, description, importance 
-                    FROM entities 
-                    WHERE status = 'active' 
-                    ORDER BY importance DESC 
-                    LIMIT ?
-                    \"\"\",
-                    (GLOBAL_READ_ENTITY_LIMIT,)
-                )
-            
-            entities = [dict(row) for row in await cursor.fetchall()]
-            entity_names = [e["name"] for e in entities]
 
-            if not entity_names:
+async def check_conflict(
+    entity_name: str, new_contents: list[str], agent_id: str, conn=None
+) -> list[tuple[bool, str | None]]:
+    """
+    Checks if a list of new observations contradicts existing knowledge about an entity using Gemini.
+    Returns a list of (is_conflict, reason) tuples.
+    """
+    if not new_contents:
+        return []
+
+    try:
+        client = get_gemini_client()
+        if not client:
+            log_error("Conflict check aborted: Gemini client not initialized (check API key)")
+            return [(False, None)] * len(new_contents)
+
+        logger.info(f"Checking conflicts for entity='{entity_name}' ({len(new_contents)} items)")
+        if conn is None:
+            async with await async_get_connection() as managed_conn:
+                return await _check_conflicts_internal(
+                    entity_name, new_contents, agent_id, managed_conn, client
+                )
+        else:
+            return await _check_conflicts_internal(
+                entity_name, new_contents, agent_id, conn, client
+            )
+    except Exception as e:
+        log_error("Conflict check failed", e)
+        raise e
+
+
+@retry_on_ai_quota()
+async def _check_conflicts_internal(
+    entity_name: str, new_contents: list[str], agent_id: str, conn, client
+):
+    # Fetch up to 5 most recent observations for richer context
+    cursor = await conn.execute(
+        "SELECT content FROM observations WHERE entity_name = ? ORDER BY timestamp DESC LIMIT 5",
+        (entity_name,),
+    )
+    existing = await cursor.fetchall()
+
+    if not existing:
+        return [(False, None)] * len(new_contents)
+
+    existing_text = "\n".join([f"- {row[0]}" for row in existing])
+    new_text_numbered = "\n".join([f"{i}. {content}" for i, content in enumerate(new_contents)])
+
+    prompt = (
+        "You are a Fact-Checking Engine. Check if any of the following NEW statements "
+        f"contradict the EXISTING knowledge about '{entity_name}'.\n\n"
+        f"EXISTING KNOWLEDGE:\n{existing_text}\n\n"
+        f"NEW STATEMENTS:\n{new_text_numbered}\n\n"
+        "Output MUST be a JSON list of objects, one for each NEW statement in order:\n"
+        '[{"conflict": bool, "reason": "string"}, ...]'
+    )
+
+    # Enforce Rate Limiting
+    await AIRateLimiter.throttle()
+
+    response = await client.aio.models.generate_content(
+        model=settings.generative_model,
+        contents=prompt,
+        config={"response_mime_type": "application/json"},
+    )
+    data = json.loads(response.text)
+    
+    results = []
+    if isinstance(data, list) and len(data) == len(new_contents):
+        results = data
+    elif isinstance(data, dict):
+        results = [data] * len(new_contents)
+
+    if not results:
+        return [(False, None)] * len(new_contents)
+
+    final_results = []
+    for i, item in enumerate(results):
+        is_conflict = item.get("conflict", False)
+        reason = item.get("reason") if is_conflict else None
+        final_results.append((is_conflict, reason))
+
+        if is_conflict:
+            logger.warning(f"CONFLICT DETECTED in '{entity_name}': {reason}")
+            # Log to DB
+            await conn.execute(
+                "INSERT INTO conflicts "
+                "(entity_name, existing_content, new_content, reason, agent_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (entity_name, existing_text, new_contents[i], reason, agent_id),
+            )
+
+    await conn.commit()
+    return final_results
+
+
+
+
+async def search_by_tags(tags: list[str], conn) -> list[str]:
+    """
+    Returns content_ids that match ANY of the given tags.
+    """
+    if not tags:
+        return []
+
+    placeholders = ",".join(["?"] * len(tags))
+    try:
+        cursor = await conn.execute(
+            f"SELECT DISTINCT content_id FROM tags WHERE tag IN ({placeholders})",
+            tags
+        )
+        rows = await cursor.fetchall()
+        return [r[0] for r in rows]
+    except Exception as e:
+        get_logger("graph").error(f"Tag search failed: {e}")
+        return []
+
+
+async def save_entities(
+    entities: list[dict[str, Any]],
+    agent_id: str,
+    conn,
+    precomputed_vectors: list[list[float]] | None = None,
+) -> str:
+    """
+    Saves entities to the database.
+    Accepts precomputed_vectors to support 'Compute-then-Write' architecture.
+    """
+    results = []
+    success_count = 0
+
+    # 1. Prepare data
+    items_to_process = []
+    logger.info(f"Saving {len(entities)} entities (agent={agent_id})...")
+    for e in entities:
+        name = str(e.get("name") or "").strip()
+        if not name:
+            results.append("Error: Entity name is required")
+            continue
+
+        e_type = e.get("entity_type", "concept")
+        desc = e.get("description", "")
+        importance = e.get("importance", 5)
+
+        try:
+            importance = max(1, min(10, int(importance)))
+        except (ValueError, TypeError):
+
+            get_logger("graph").debug(
+                f"Invalid importance value for {name}: {importance}. Defaulting to 5."
+            )
+            importance = 5
+
+        items_to_process.append(
+            {
+                "name": name,
+                "type": e_type,
+                "desc": desc,
+                "importance": importance,
+                "embedding_text": f"{name} ({e_type}): {desc}",
+            }
+        )
+
+    if not items_to_process:
+        if results:
+            return f"Saved 0 entities (Errors: {len(results)})"
+        return "Saved 0 entities"
+
+    # 2. Assign Vectors (Precomputed or Fresh)
+    if precomputed_vectors is not None:
+        vectors = precomputed_vectors
+    else:
+        embedding_texts = [item["embedding_text"] for item in items_to_process]
+        vectors = await compute_embeddings_bulk(embedding_texts)
+
+    # 3. Fast Database Sync
+    for i, item in enumerate(items_to_process):
+        name = item["name"]
+        e_type = item["type"]
+        desc = item["desc"]
+        importance = item["importance"]
+        vector = vectors[i] if i < len(vectors) else None
+
+        # Fetch old state for audit
+        cursor = await conn.execute(
+            "SELECT entity_type, description FROM entities WHERE name = ?", (name,)
+        )
+        old_row = await cursor.fetchone()
+        old_data = json.dumps(dict(old_row)) if old_row else None
+        action = "UPDATE" if old_row else "INSERT"
+
+        await conn.execute(
+            "INSERT OR REPLACE INTO entities "
+            "(name, entity_type, description, importance, updated_by) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (name, e_type, desc, importance, agent_id),
+        )
+
+        # Log Audit
+        new_data = json.dumps({"name": name, "type": e_type, "desc": desc})
+        meta = json.dumps(
+            {
+                "model": settings.embedding_model if vector else None,
+                "has_vector": bool(vector),
+                "conflict_info": None,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+        await conn.execute(
+            "INSERT INTO audit_logs (table_name, content_id, action, "
+            "old_data, new_data, agent_id, meta_data) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("entities", name, action, old_data, new_data, agent_id, meta),
+        )
+
+        if vector:
+            await conn.execute(
+                "INSERT OR REPLACE INTO embeddings "
+                "(content_id, vector, model_name) VALUES (?, ?, ?)",
+                (name, json.dumps(vector).encode("utf-8"), settings.embedding_model),
+            )
+        success_count += 1
+
+    msg = f"Saved {success_count} entities (agent={agent_id})"
+    if results:
+        msg += f" (Errors: {len(results)})"
+    logger.info(msg)
+    return msg
+
+
+async def save_relations(relations: list[dict[str, Any]], agent_id: str, conn) -> str:
+    valid_relations = []
+    errors = []
+    logger.info(f"Saving {len(relations)} relations (agent={agent_id})...")
+    for r in relations:
+        # Standard terminology: Subject-Predicate-Object
+        # Fallback to source/target/relation_type for migration period
+        subject = (r.get("subject") or r.get("source") or "").strip()
+        obj = (r.get("object") or r.get("target") or "").strip()
+        predicate = (r.get("predicate") or r.get("relation_type") or "").strip()
+
+        if not all([subject, obj, predicate]):
+            msg = f"Error: Relation requires subject, object, and predicate: {r}"
+            errors.append(msg)
+            continue
+        valid_relations.append((subject, obj, predicate, agent_id))
+
+    if valid_relations:
+        # DB schema was updated to use subject, object, predicate
+        await conn.executemany(
+            "INSERT OR REPLACE INTO relations "
+            "(subject, object, predicate, created_by) VALUES (?, ?, ?, ?)",
+            valid_relations,
+        )
+
+        # Log Audit for each relation
+        for subject, obj, predicate, creator in valid_relations:
+            await conn.execute(
+                "INSERT INTO audit_logs (table_name, content_id, action, "
+                "new_data, agent_id, meta_data) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "relations",
+                    f"{subject}->{predicate}->{obj}",
+                    "INSERT",
+                    json.dumps({"subject": subject, "object": obj, "predicate": predicate}),
+                    creator,
+                    json.dumps(
+                        {
+                            "agent_context": "relation_mapping",
+                            "conflict_info": None,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    ),
+                ),
+            )
+
+    msg = f"Saved {len(valid_relations)} relations (agent={agent_id})"
+    if errors:
+        msg += f" (Errors: {len(errors)})"
+    logger.info(msg)
+    return msg
+
+
+async def save_observations(
+    observations: list[dict[str, Any]],
+    agent_id: str,
+    conn,
+    precomputed_conflicts: list[dict[str, Any]] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """
+    Saves observations.
+    Accepts precomputed_conflicts to minimize transaction duration.
+    """
+    conflicts_to_report = []
+    errors = []
+    success_count = 0
+
+    logger.info(f"Saving {len(observations)} observations (agent={agent_id})...")
+    for i, o in enumerate(observations):
+        entity_name = o.get("entity_name", "").strip()
+        content = o.get("content", "").strip()
+
+        if not entity_name or not content:
+            errors.append(f"Error: Observation requires entity_name and content: {o}")
+            continue
+
+        content = mask_sensitive_data(content)
+
+        # Conflict check
+        is_actually_conflict = False
+        if precomputed_conflicts is not None:
+            # Match conflict from precomputed results if available
+            conflict_info = precomputed_conflicts[i] if i < len(precomputed_conflicts) else None
+            if conflict_info and conflict_info.get("is_conflict"):
+                conflicts_to_report.append(
+                    {"entity": entity_name, "reason": conflict_info.get("reason")}
+                )
+                is_actually_conflict = True
+        else:
+            results = await check_conflict(entity_name, [content], agent_id, conn=conn)
+            if results and results[0][0]:
+                is_conflict, reason = results[0]
+                conflicts_to_report.append({"entity": entity_name, "reason": reason})
+                is_actually_conflict = True
+
+        if is_actually_conflict:
+            continue
+
+        await conn.execute(
+            "INSERT INTO observations (entity_name, content, created_by) VALUES (?, ?, ?)",
+            (entity_name, content, agent_id),
+        )
+        await conn.execute(
+            "UPDATE entities SET importance = MIN(importance + 1, 10), "
+            "updated_at = CURRENT_TIMESTAMP WHERE name = ?",
+            (entity_name,),
+        )
+        # Log Audit
+        conflict_meta = next((c for c in conflicts_to_report if c["entity"] == entity_name), None)
+        meta = json.dumps(
+            {
+                "agent_context": "development_trace",
+                "conflict_info": conflict_meta,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+        await conn.execute(
+            "INSERT INTO audit_logs (table_name, content_id, action, "
+            "new_data, agent_id, meta_data) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                "observations",
+                entity_name,
+                "INSERT",
+                json.dumps({"content": content}),
+                agent_id,
+                meta,
+            ),
+        )
+        success_count += 1
+
+    msg = f"Saved {success_count} observations (agent={agent_id})"
+    if errors:
+        msg += f" (Errors: {len(errors)})"
+    logger.info(msg)
+    return msg, conflicts_to_report
+
+
+async def get_graph_data(query: str | None = None) -> dict[str, Any]:
+    async with await async_get_connection() as conn:
+        if query:
+            # Fallback keyword search
+            cursor = await conn.execute(
+                "SELECT name, entity_type, description, importance FROM entities WHERE "
+                "(name LIKE ? OR description LIKE ? OR entity_type LIKE ?) AND status = 'active' "
+                "LIMIT ?",
+                (f"%{query}%", f"%{query}%", f"%{query}%", settings.global_read_entity_limit),
+            )
+            matched_entities = await cursor.fetchall()
+            entity_matched_names = [e["name"] for e in matched_entities]
+
+            # Also search observations directly
+            cursor = await conn.execute(
+                "SELECT entity_name, content, timestamp FROM observations "
+                "WHERE content LIKE ? AND status = 'active' LIMIT ?",
+                (f"%{query}%", settings.global_read_entity_limit * 2),
+            )
+            direct_observations = await cursor.fetchall()
+            obs_matched_entity_names = list(set([o["entity_name"] for o in direct_observations]))
+
+            all_matched_names = list(set(entity_matched_names + obs_matched_entity_names))
+
+            if not all_matched_names:
                 return {"entities": [], "relations": [], "observations": []}
 
-            # 2. Relation Retrieval
-            # Fetch relations where either subject or object is in our entity list
-            placeholders = ",".join(["?"] * len(entity_names))
+            placeholders = ",".join(["?"] * len(all_matched_names))
             cursor = await conn.execute(
-                f\"\"\"
-                SELECT subject, object, predicate 
-                FROM relations 
-                WHERE (subject IN ({placeholders}) OR object IN ({placeholders})) 
-                AND status = 'active'
-                \"\"\",
-                entity_names + entity_names
+                f"SELECT subject, object, predicate FROM relations "
+                f"WHERE (subject IN ({placeholders}) OR object IN ({placeholders})) "
+                f"AND status = 'active'",
+                all_matched_names + all_matched_names,
             )
-            relations = [dict(row) for row in await cursor.fetchall()]
+            relations = await cursor.fetchall()
 
-            # 3. Observation Retrieval (Capped per entity)
-            # Fetch latest observations for the retrieved entities
-            for name in entity_names:
-                cursor = await conn.execute(
-                    \"\"\"
-                    SELECT content, importance, created_at 
-                    FROM observations 
-                    WHERE entity_name = ? AND status = 'active' 
-                    ORDER BY created_at DESC 
-                    LIMIT ?
-                    \"\"\",
-                    (name, MAX_OBSERVATIONS_PER_ENTITY)
-                )
-                entity_obs = [dict(row) for row in await cursor.fetchall()]
-                for obs in entity_obs:
-                    obs["entity_name"] = name
-                    observations.append(obs)
+            # For observations, we fetch and then cap in Python
+            cursor = await conn.execute(
+                "SELECT entity_name, content, timestamp FROM observations WHERE entity_name IN "
+                f"({placeholders}) AND status = 'active' ORDER BY timestamp DESC",
+                all_matched_names,
+            )
+            all_potential_obs = await cursor.fetchall()
+
+            # Combine direct matches and linked ones, then cap per entity
+            obs_by_entity = {}
+            for o in list(direct_observations) + list(all_potential_obs):
+                ename = o["entity_name"]
+                if ename not in obs_by_entity:
+                    obs_by_entity[ename] = {}
+                
+                # Deduplicate by content
+                content = o["content"]
+                if content not in obs_by_entity[ename]:
+                    if len(obs_by_entity[ename]) < settings.max_observations_per_entity:
+                        obs_by_entity[ename][content] = {
+                            "entity": ename,
+                            "content": content,
+                            "at": o["timestamp"],
+                        }
+
+            final_observations = []
+            for entity_obs in obs_by_entity.values():
+                final_observations.extend(entity_obs.values())
 
             return {
-                "entities": entities,
-                "relations": relations,
-                "observations": observations
+                "entities": [dict(e) for e in matched_entities],
+                "relations": [dict(r) for r in relations],
+                "observations": final_observations,
             }
-
-    except Exception as e:
-        log_error("Failed to retrieve graph data", e)
-        return {"error": str(e)}
-
-async def save_graph_data(
-    entities: List[Dict[str, Any]] | None = None,
-    relations: List[Dict[str, Any]] | None = None,
-    observations: List[Dict[str, Any]] | None = None
-):
-    \"\"\"
-    Saves new entities, relations, and observations to the database.
-    This handles both initial storage and updates.
-    \"\"\"
-    db_path = get_db_path()
-    async with aiosqlite.connect(db_path) as conn:
-        now = datetime.now(UTC).isoformat()
-        
-        # 1. Save Entities
-        if entities:
-            for entity in entities:
-                name = entity.get("name")
-                e_type = entity.get("entity_type", "generic")
-                desc = entity.get("description", "")
+        else:
+            # Global Read: Return most recent entities
+            cursor = await conn.execute(
+                "SELECT name, entity_type, description, importance FROM entities "
+                "WHERE status = 'active' ORDER BY updated_at DESC LIMIT ?",
+                (settings.global_read_entity_limit,)
+            )
+            entities = await cursor.fetchall()
+            entity_names = [e["name"] for e in entities]
+            
+            if not entity_names:
+                return {"entities": [], "relations": [], "observations": []}
                 
-                await conn.execute(
-                    \"\"\"
-                    INSERT INTO entities (name, entity_type, description, status, created_at, updated_at)
-                    VALUES (?, ?, ?, 'active', ?, ?)
-                    ON CONFLICT(name) DO UPDATE SET
-                        entity_type = excluded.entity_type,
-                        description = excluded.description,
-                        updated_at = excluded.updated_at
-                    \"\"\",
-                    (name, e_type, desc, now, now)
-                )
+            placeholders = ",".join(["?"] * len(entity_names))
+            cursor = await conn.execute(
+                f"SELECT subject, object, predicate FROM relations "
+                f"WHERE (subject IN ({placeholders}) OR object IN ({placeholders})) "
+                f"AND status = 'active'",
+                entity_names + entity_names,
+            )
+            relations = await cursor.fetchall()
+            
+            cursor = await conn.execute(
+                f"SELECT entity_name, content, timestamp FROM observations "
+                f"WHERE entity_name IN ({placeholders}) AND status = 'active' "
+                f"ORDER BY timestamp DESC",
+                entity_names
+            )
+            all_obs = await cursor.fetchall()
+            
+            # Cap per entity
+            obs_by_entity = {}
+            for o in all_obs:
+                ename = o["entity_name"]
+                if ename not in obs_by_entity:
+                    obs_by_entity[ename] = []
+                if len(obs_by_entity[ename]) < settings.max_observations_per_entity:
+                    obs_by_entity[ename].append({
+                        "entity": ename,
+                        "content": o["content"],
+                        "at": o["timestamp"],
+                    })
+            
+            final_observations = []
+            for entity_obs in obs_by_entity.values():
+                final_observations.extend(entity_obs)
 
-        # 2. Save Relations
-        if relations:
-            for rel in relations:
-                sub = rel.get("subject")
-                obj = rel.get("object")
-                pred = rel.get("predicate", "related_to")
-                
-                await conn.execute(
-                    \"\"\"
-                    INSERT INTO relations (subject, object, predicate, status, created_at, updated_at)
-                    VALUES (?, ?, ?, 'active', ?, ?)
-                    ON CONFLICT(subject, object, predicate) DO UPDATE SET
-                        status = 'active',
-                        updated_at = excluded.updated_at
-                    \"\"\",
-                    (sub, obj, pred, now, now)
-                )
-
-        # 3. Save Observations
-        if observations:
-            for obs in observations:
-                e_name = obs.get("entity_name")
-                content = obs.get("content")
-                importance = obs.get("importance", 5)
-                
-                await conn.execute(
-                    \"\"\"
-                    INSERT INTO observations (entity_name, content, importance, status, created_at)
-                    VALUES (?, ?, ?, 'active', ?)
-                    \"\"\",
-                    (e_name, content, importance, now)
-                )
-        
-        await conn.commit()
-        log_info(f"Saved {len(entities or [])} entities, {len(relations or [])} relations, {len(observations or [])} observations")
+            return {
+                "entities": [dict(e) for e in entities],
+                "relations": [dict(r) for r in relations],
+                "observations": final_observations,
+            }
