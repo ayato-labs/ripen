@@ -1,94 +1,213 @@
-import os
-import sqlite3
+import asyncio
 import json
-from datetime import datetime
+import os
+import random
+import sqlite3
+
 import aiosqlite
+
 from shared_memory.common.exceptions import DatabaseError, DatabaseLockedError
 from shared_memory.common.utils import get_db_path, get_logger, log_error
 from shared_memory.infra.schema import TABLES, get_create_table_sql
 
 logger = get_logger("database")
 
+# Global singletons for persistent connections
+_MAIN_CONNECTION: aiosqlite.Connection | None = None
+_THOUGHTS_CONNECTION: aiosqlite.Connection | None = None
+
+# Global lock to prevent race conditions during singleton initialization
+_INIT_LOCK: asyncio.Lock | None = None
+
+
+def _get_init_lock() -> asyncio.Lock:
+    global _INIT_LOCK
+    if _INIT_LOCK is None:
+        _INIT_LOCK = asyncio.Lock()
+    return _INIT_LOCK
+
+# Global semaphores mapped by event loop to limit concurrent DB writes
+_WRITE_SEMAPHORES: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+
+
+def get_write_semaphore() -> asyncio.Semaphore:
+    """Returns a write semaphore bound to the current event loop."""
+    loop = asyncio.get_running_loop()
+    if loop not in _WRITE_SEMAP_ORES:
+        _WRITE_SEMAPHORES[loop] = asyncio.Semaphore(1)
+    return _WRITE_SEMAPHORES[loop]
+
+
+# Global flag to track if the main database has been initialized in the current session.
 _DB_INITIALIZED = False
-_SINGLETON_CONNECTION = None
-_THOUGHTS_CONNECTION = None
 
-@asynccontextmanager
-async def async_get_connection():
-    """
-    Asynchronous connection context manager using a singleton pattern
-    to avoid 'database is locked' errors in multi-agent environments.
-    """
-    global _SINGLETON_CONNECTION
-    db_path = get_db_path()
 
-    if _SINGLETON_CONNECTION is None or not _SINGLETON_CONNECTION.is_alive():
-        _SINGLETON_CONNECTION = await _async_get_connection_raw(db_path)
-        logger.info(f"Establishing NEW singleton connection to: {db_path}")
-
-        # Configure PRAGMAs for performance and concurrency
-        await _SINGLETON_CONNECTION.execute("PRAGMA journal_mode = WAL")
-        await _SINGLETON_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-        await _SINGLETON_CONNECTION.execute("PRAGMA foreign_keys = ON")
-        await _SINGLETON_CONNECTION.execute("PRAGMA busy_timeout = 5000")
-        logger.info("Main connection successfully established and configured.")
-
-    try:
-        yield _SINGLETON_CONNECTION
-        # No need to commit here; let the caller decide if needed.
-    except Exception as e:
-        logger.error(f"Error during async database operation: {e}")
-        raise DatabaseError(f"Database operation failed: {e}")
-
-@asynccontextmanager
-async def async_get_thoughts_connection():
-    """
-    Returns a connection to the thoughts database.
-    """
-    global _THOUGHTS_CONNECTION
-    db_path = os.path.join(os.path.dirname(get_db_path()), "thoughts.db")
-
-    if _THOUGHTS_CONNECTION is None or not _THOUGHTS_CONNECTION.is_alive():
-        _THOUGHTS_CONNECTION = await _async_get_connection_raw(db_path)
-        logger.info(f"Establishing NEW thoughts singleton: {db_path}")
-        await _THOUGHTS_CONNECTION.execute("PRAGMA journal_mode = WAL")
-        await _THOUGHTS_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-        logger.info("Thoughts connection PRAGMAs configured (WAL/NORMAL).")
-
-    try:
-        yield _THOUGHTS_CONNECTION
-    except Exception as e:
-        logger.error(f"Error during thoughts database operation: {e}")
-        raise DatabaseError(f"Thoughts database operation failed: {e}")
-
-async def _async_get_connection_raw(db_path):
-    conn = await aiosqlite.connect(db_path)
-    conn.row_factory = aiosqlite.Row
-    return conn
-
-def retry_on_db_lock(max_retries=5, initial_wait=0.2):
+def retry_on_db_lock(max_retries=15, initial_delay=0.1):
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            last_error = None
-            for i in range(max_retries):
+            retries = 0
+            while retries < max_retries:
                 try:
                     return await func(*args, **kwargs)
-                except (sqlite3.OperationalError, aiosqlite.OperationalError) as e:
-                    if "database is locked" in str(e).lower():
-                        last_error = e
-                        wait_time = initial_wait * (2**i)
-                        logger.warning(
-                            f"Database locked. Retrying {i+1}/{max_retries} in {wait_time}s..."
+                except (aiosqlite.OperationalError, DatabaseError, sqlite3.OperationalError) as e:
+                    error_str = str(e).lower()
+                    if "database is locked" in error_str:
+                        retries += 1
+                        delay = min(initial_delay * (2 ** (retries - 1)), 1.0) + random.uniform(
+                            0, 0.1
                         )
-                        await asyncio.sleep(wait_time)
-                        continue
-                    raise
-            logger.error(f"Failed after {max_retries} retries due to database lock: {last_error}")
-            raise DatabaseLockedError(f"Database remains locked after retries: {last_error}")
+                        logger.warning(
+                            f"DATABASE LOCKED: Attempt {retries}/{max_retries}. "
+                            f"Waiting {delay:.2f}s before retry. "
+                            f"(Source: {func.__name__}, Error: {e})"
+                        )
+                        if retries == max_retries:
+                            logger.error(
+                                f"DATABASE FATAL: Max retries ({max_retries}) "
+                                f"exceeded for {func.__name__}. Giving up."
+                            )
+                            raise DatabaseLockedError(
+                                f"Database remained locked after {max_retries} attempts."
+                            ) from e
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error(f"DATABASE ERROR: Non-lock error in {func.__name__}: {e}")
+                        raise e
+            return await func(*args, **kwargs)
 
         return wrapper
 
     return decorator
+
+
+class AsyncSQLiteConnection:
+    """
+    A context manager that returns the Singleton connection for the database.
+    Does NOT close the connection on exit (managed by server lifespan).
+    """
+
+    def __init__(self, db_path: str, is_thoughts: bool = False):
+        self.db_path = db_path
+        self.is_thoughts = is_thoughts
+        self.conn = None
+
+    async def __aenter__(self):
+        global _MAIN_CONNECTION, _THOUGHTS_CONNECTION
+        try:
+            async with _get_init_lock():
+                if self.is_thoughts:
+                    if _THOUGHTS_CONNECTION is None:
+                        logger.info(f"Establishing NEW thoughts singleton: {self.db_path}")
+                        _THOUGHTS_CONNECTION = await aiosqlite.connect(self.db_path, timeout=30.0)
+                        _THOUGHTS_CONNECTION.row_factory = aiosqlite.Row
+                        await _THOUGHTS_CONNECTION.execute("PRAGMA journal_mode = WAL")
+                        await _THOUGHTS_CONNECTION.execute("PRAGMA synchronous = NORMAL")
+                        logger.info("Thoughts connection PRAGMAs configured (WAL/NORMAL).")
+                    self.conn = _THOUGHTS_CONNECTION
+                else:
+                    if _MAIN_CONNECTION is None:
+                        logger.info(f"Establishing NEW singleton connection to: {self.db_path}")
+                        try:
+                            _MAIN_CONNECTION = await aiosqlite.connect(self.db_path, timeout=30.0)
+                            _MAIN_CONNECTION.row_factory = aiosqlite.Row
+                            await _MAIN_CONNECTION.execute("PRAGMA foreign_keys = ON")
+                            await _MAIN_CONNECTION.execute("PRAGMA journal_mode = WAL")
+                            await _MAIN_CONNECTION.execute("PRAGMA synchronous = NORMAL")
+                            await _MAIN_CONNECTION.execute("PRAGMA cache_size = -2000")
+                            logger.info("Main connection successfully established and configured.")
+                        except Exception:
+                            logger.exception("CRITICAL: Failed to establish main DB connection")
+                            raise
+                    self.conn = _MAIN_CONNECTION
+
+            return self.conn
+        except Exception as e:
+            from shared_memory.common.exceptions import DatabaseError
+
+            logger.exception("Failed to connect to database at {db_path}", db_path=self.db_path)
+            log_error(f"Failed to connect to database at {self.db_path}", e)
+            raise DatabaseError(f"Database connection failed: {e}") from e
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            logger.error(
+                f"Exception detected in AsyncSQLiteConnection context for {self.db_path}: "
+                f"{exc_type.__name__}: {exc_val}"
+            )
+        # We don't close the connection here as it's a managed singleton
+
+    def __await__(self):
+        async def _internal():
+            return self
+
+        return _internal().__await__()
+
+
+async def close_all_connections():
+    """
+    Closes all singleton connections. Should be called during server shutdown
+    or between tests to ensure isolation.
+    """
+    global _MAIN_CONNECTION, _THOUGHTS_CONNECTION, _DB_INITIALIZED
+    logger.info("Closing all singleton database connections...")
+    async with _get_init_lock():
+        if _MAIN_CONNECTION:
+            await _MAIN_CONNECTION.close()
+            _MAIN_CONNECTION = None
+            logger.info("Main connection closed.")
+        if _THOUGHTS_CONNECTION:
+            await _THOUGHTS_CONNECTION.close()
+            _THOUGHTS_CONNECTION = None
+            logger.info("Thoughts connection closed.")
+        _DB_INITIALIZED = False
+
+
+async def _async_get_connection_raw(db_path: str, is_thoughts: bool = False):
+    """
+    INTERNAL USE ONLY. Returns a connection wrapper without triggering
+    lazy initialization.
+    """
+    return AsyncSQLiteConnection(db_path, is_thoughts=is_thoughts)
+
+
+async def async_get_connection():
+    """
+    Returns an AsyncSQLiteConnection wrapper for the main database.
+    Usage: async with await async_get_connection() as conn:
+    """
+    await init_db()
+    return await _async_get_connection_raw(get_db_path())
+
+
+async def async_get_thoughts_connection():
+    """
+    Returns an AsyncSQLiteConnection wrapper for the thoughts database.
+    Guarantees that init_thoughts_db() has been called.
+    """
+    from shared_memory.common.utils import get_thoughts_db_path
+    from shared_memory.core.thought_logic import init_thoughts_db
+
+    await init_thoughts_db()
+    return await _async_get_connection_raw(get_thoughts_db_path(), is_thoughts=True)
+
+
+async def _add_column_if_missing(cursor, table, col_def):
+    """
+    Safely adds a column to a table if it doesn't already exist.
+    """
+    col_name = col_def.split()[0]
+    await cursor.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in await cursor.fetchall()]
+
+    if col_name in columns:
+        return
+
+    try:
+        await cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+    except aiosqlite.OperationalError as e:
+        log_error(f"CRITICAL: Migration failed for table '{table}' adding '{col_def}'", e)
+        raise
+
 
 @retry_on_db_lock()
 async def init_db(force: bool = False):
@@ -141,114 +260,181 @@ async def init_db(force: bool = False):
         # --- Full Text Search (FTS5) Support ---
         await cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
-                name,
-                description,
-                content='entities',
-                tokenize='unicode61 remove_diacritics 1'
+                name, description, 
+                content='entities'
             )
         """)
         await cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
-                entity_name,
-                content,
-                content='observations',
-                tokenize='unicode61 remove_diacritics 1'
+                entity_name, content, 
+                content='observations', content_rowid='id'
             )
         """)
         await cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS bank_files_fts USING fts5(
-                filename,
-                content,
-                content='bank_files',
-                tokenize='unicode61 remove_diacritics 1'
+                filename, content, 
+                content='bank_files'
             )
         """)
 
-        # Triggers for FTS synchronization
-        # Entities
+        # FTS Triggers: entities
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_ai AFTER INSERT ON entities BEGIN
-              INSERT INTO entities_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+                INSERT INTO entities_fts(rowid, name, description) 
+                VALUES (new.rowid, new.name, new.description);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
-              INSERT INTO entities_fts(entities_fts, rowid, name, description) VALUES('delete', old.rowid, old.name, old.description);
+                INSERT INTO entities_fts(entities_fts, rowid, name, description) 
+                VALUES('delete', old.rowid, old.name, old.description);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
-              INSERT INTO entities_fts(entities_fts, rowid, name, description) VALUES('delete', old.rowid, old.name, old.description);
-              INSERT INTO entities_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+                INSERT INTO entities_fts(entities_fts, rowid, name, description) 
+                VALUES('delete', old.rowid, old.name, old.description);
+                INSERT INTO entities_fts(rowid, name, description) 
+                VALUES (new.rowid, new.name, new.description);
             END;
         """)
 
-        # Observations
+        # FTS Triggers: observations
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
-              INSERT INTO observations_fts(rowid, entity_name, content) VALUES (new.rowid, new.entity_name, new.content);
+                INSERT INTO observations_fts(rowid, entity_name, content) 
+                VALUES (new.id, new.entity_name, new.content);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-              INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) VALUES('delete', old.rowid, old.entity_name, old.content);
+                INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
+                VALUES('delete', old.id, old.entity_name, old.content);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-              INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) VALUES('delete', old.rowid, old.entity_name, old.content);
-              INSERT INTO observations_fts(rowid, entity_name, content) VALUES (new.rowid, new.entity_name, new.content);
+                INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
+                VALUES('delete', old.id, old.entity_name, old.content);
+                INSERT INTO observations_fts(rowid, entity_name, content) 
+                VALUES (new.id, new.entity_name, new.content);
             END;
         """)
 
-        # Bank Files
+        # FTS Triggers: bank_files
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS bank_files_ai AFTER INSERT ON bank_files BEGIN
-              INSERT INTO bank_files_fts(rowid, filename, content) VALUES (new.rowid, new.filename, new.content);
+                INSERT INTO bank_files_fts(rowid, filename, content) 
+                VALUES (new.rowid, new.filename, new.content);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS bank_files_ad AFTER DELETE ON bank_files BEGIN
-              INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) VALUES('delete', old.rowid, old.filename, old.content);
+                INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
+                VALUES('delete', old.rowid, old.filename, old.content);
             END;
         """)
         await cursor.execute("""
             CREATE TRIGGER IF NOT EXISTS bank_files_au AFTER UPDATE ON bank_files BEGIN
-              INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) VALUES('delete', old.rowid, old.filename, old.content);
-              INSERT INTO bank_files_fts(rowid, filename, content) VALUES (new.rowid, new.filename, new.content);
+                INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
+                VALUES('delete', old.rowid, old.filename, old.content);
+                INSERT INTO bank_files_fts(rowid, filename, content) 
+                VALUES (new.rowid, new.filename, new.content);
             END;
         """)
 
-        # Run Migrations
-        from shared_memory.migrations.manager import MigrationManager
-        migrator = MigrationManager(db_path)
-        await migrator.run_migrations(conn)
+        # Population: Ensure existing data is indexed
+        await cursor.execute("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
+        await cursor.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+        await cursor.execute("INSERT INTO bank_files_fts(bank_files_fts) VALUES('rebuild')")
 
         await conn.commit()
-        logger.info("Main database initialization successful.")
 
-    _DB_INITIALIZED = True
+        # --- RUN MIGRATIONS ---
+        from shared_memory.migrations.manager import MigrationManager
 
-async def close_all_connections():
-    """Explicitly closes all singleton connections (useful for tests)."""
-    global _SINGLETON_CONNECTION, _THOUGHTS_CONNECTION, _DB_INITIALIZED
-    logger.info("Closing all singleton database connections...")
-    if _SINGLETON_CONNECTION:
-        await _SINGLETON_CONNECTION.close()
-        _SINGLETON_CONNECTION = None
-    if _THOUGHTS_CONNECTION:
-        await _THOUGHTS_CONNECTION.close()
-        _THOUGHTS_CONNECTION = None
-    _DB_INITIALIZED = False
+        migrator = MigrationManager(get_db_path())
+        await migrator.run_migrations(conn)
 
-async def _add_column_if_missing(cursor, table_name, column_def):
+        # Final Verification: Ensure critical tables exist before marking as initialized
+        cursor = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entities'"
+        )
+        if not await cursor.fetchone():
+            _DB_INITIALIZED = False
+            log_error("Critical failure: 'entities' table missing after init_db.")
+        else:
+            _DB_INITIALIZED = True
+            logger.info("Main database initialization successful.")
+
+
+@retry_on_db_lock()
+async def update_access(content_id: str, conn=None):
+    # Guard: Ensure DB is initialized before any access update
+    await init_db()
+    if conn is None:
+        async with await async_get_connection() as managed_conn:
+            await managed_conn.execute(
+                """
+                INSERT INTO knowledge_metadata (
+                    content_id, access_count, last_accessed,
+                    importance_score, stability, decay_rate
+                )
+                VALUES (?, 1, CURRENT_TIMESTAMP, 1.0, 1.1, 0.01)
+                ON CONFLICT(content_id) DO UPDATE SET
+                    access_count = access_count + 1,
+                    last_accessed = CURRENT_TIMESTAMP,
+                    stability = stability * 1.1
+                """,
+                (content_id,),
+            )
+            await managed_conn.commit()
+    else:
+        await conn.execute(
+            """
+            INSERT INTO knowledge_metadata (
+                content_id, access_count, last_accessed,
+                importance_score, stability, decay_rate
+            )
+            VALUES (?, 1, CURRENT_TIMESTAMP, 1.0, 1.1, 0.01)
+            ON CONFLICT(content_id) DO UPDATE SET
+                access_count = access_count + 1,
+                last_accessed = CURRENT_TIMESTAMP,
+                stability = stability * 1.1
+        """,
+            (content_id,),
+        )
+
+
+@retry_on_db_lock()
+async def log_search_stat(
+    query: str,
+    results_count: int,
+    hit_ids: list[str] = None,
+    avg_sim: float = 0.0,
+    conn=None,
+):
     """
-    Helper to add columns to existing tables during migration.
-    Deprecated: Use MigrationManager for future changes.
+    Logs the result count of a search for hit rate and knowledge age calculation.
     """
-    column_name = column_def.split()[0]
-    cursor.execute(f"PRAGMA table_info({table_name})")
-    columns = [row[1] for row in await cursor.fetchall()]
-    if column_name not in columns:
-        logger.info(f"Adding missing column '{column_name}' to table '{table_name}'...")
-        await cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_def}")
+    # Guard: Ensure DB is initialized before logging stats
+    await init_db()
+
+    hit_ids_json = json.dumps(hit_ids or [])
+
+    async def _execute(c):
+        await c.execute(
+            """
+            INSERT INTO search_stats (
+                query, results_count, hit_content_ids, avg_similarity
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (query, results_count, hit_ids_json, avg_sim),
+        )
+        await c.commit()
+
+    if conn is not None:
+        await _execute(conn)
+    else:
+        async with await async_get_connection() as managed_conn:
+            await _execute(managed_conn)
