@@ -21,7 +21,7 @@ logger = get_logger("logic")
 
 
 def normalize_entities(entities: list[dict[str, Any] | str] | None) -> list[dict[str, Any]]:
-    """Normalize entities from strings or various dict formats."""
+    \"\"\"Normalize entities from strings or various dict formats.\"\"\"
     normalized = []
     for e in entities or []:
         if isinstance(e, str):
@@ -36,7 +36,7 @@ def normalize_entities(entities: list[dict[str, Any] | str] | None) -> list[dict
 
 
 def normalize_observation_item(obs: dict[str, Any] | str) -> dict[str, Any] | None:
-    """Normalize a single observation item."""
+    \"\"\"Normalize a single observation item.\"\"\"
     if isinstance(obs, str):
         return {"content": obs, "entity_name": "Global"}
     elif isinstance(obs, dict):
@@ -50,7 +50,7 @@ def normalize_observation_item(obs: dict[str, Any] | str) -> dict[str, Any] | No
 
 
 def normalize_observations(observations: list[dict[str, Any] | str] | None) -> list[dict[str, Any]]:
-    """Normalize a list of observations."""
+    \"\"\"Normalize a list of observations.\"\"\"
     normalized = []
     for obs in observations or []:
         item = normalize_observation_item(obs)
@@ -60,14 +60,14 @@ def normalize_observations(observations: list[dict[str, Any] | str] | None) -> l
 
 
 def normalize_bank_files(bank_files: Any) -> dict[str, str]:
-    """
+    \"\"\"
     Standardizes bank_files input into a dict[str, str].
     Handles:
     - Already a dict: { "file.md": "content" }
     - List of dicts with various naming:
         [{"filename": "a.md", "content": "..."}, {"name": "b.md", "text": "..."}]
     - List of simple dicts: [{"a.md": "content"}]
-    """
+    \"\"\"
     if not bank_files:
         return {}
 
@@ -129,10 +129,10 @@ async def save_memory_core(
     bank_files: dict[str, str] | list[dict[str, str]] | Any | None = None,
     agent_id: str = "default_agent",
 ) -> str:
-    """
+    \"\"\"
     Orchestrates memory saving using 'Compute-then-Write' pattern.
     Performs all slow AI operations outside the DB transaction.
-    """
+    \"\"\"
     logger.info("save_memory_core START")
     try:
         await init_db()
@@ -275,7 +275,7 @@ async def save_memory_core(
                         }
 
             # 2.2 Rapid DB Write
-            async with await async_get_connection() as conn:
+            async with async_get_connection() as conn:
                 logger.info("DB Connection ACQUIRED")
                 results = []
                 try:
@@ -329,39 +329,39 @@ async def save_memory_core(
                     await conn.commit()
                     logger.info("Database transaction COMMITTED.")
                 except aiosqlite.Error as e:
-                    logger.exception("DB Transaction Error")
+                    logger.exception(\"DB Transaction Error\")
                     await conn.rollback()
-                    log_error("Database transaction failed in save_memory_core", e)
-                    return f"Database Error: Transaction failed. {e}"
+                    log_error(\"Database transaction failed in save_memory_core\", e)
+                    return f\"Database Error: Transaction failed. {e}\"
                 except Exception as e:
-                    logger.exception("Unexpected error during DB phase")
+                    logger.exception(\"Unexpected error during DB phase\")
                     await conn.rollback()
-                    log_error("Unexpected error in save_memory_core", e)
-                    return f"Internal Error: {e}"
+                    log_error(\"Unexpected error in save_memory_core\", e)
+                    return f\"Internal Error: {e}\"
     except Exception as e:
-        logger.exception("Critical Error: Failed to acquire DB connection")
-        return f"Critical Error: Failed to acquire DB connection. {e}"
+        logger.exception(\"Critical Error: Failed to acquire DB connection\")
+        return f\"Critical Error: Failed to acquire DB connection. {e}\"
 
     db_duration = time.perf_counter() - db_start_time
     total_duration = time.perf_counter() - start_time
-    result_summary = " | ".join(results)
+    result_summary = \" | \".join(results)
     logger.info(
-        f"save_memory_core SUCCESS. Results: {result_summary}. "
-        f"Total: {total_duration:.2f}s (AI: {ai_duration:.2f}s, DB: {db_duration:.2f}s)"
+        f\"save_memory_core SUCCESS. Results: {result_summary}. \"
+        f\"Total: {total_duration:.2f}s (AI: {ai_duration:.2f}s, DB: {db_duration:.2f}s)\"
     )
     return result_summary
 
 
 async def read_memory_core(query: str | None = None) -> dict[str, Any] | str:
-    """Retrieves knowledge from graph and bank."""
+    \"\"\"Retrieves knowledge from graph and bank.\"\"\"
     start_time = time.perf_counter()
-    logger.info(f"read_memory_core START query='{query}'")
+    logger.info(f\"read_memory_core START query='{query}'\")
     try:
         from shared_memory.infra.database import init_db
 
         await init_db()
     except Exception as e:
-        return f"Database Error: Initialization failed. {e}"
+        return f\"Database Error: Initialization failed. {e}\"
 
     try:
         if query:
@@ -371,15 +371,15 @@ async def read_memory_core(query: str | None = None) -> dict[str, Any] | str:
             bank_data = await bank.read_bank_data()
 
         duration = time.perf_counter() - start_time
-        logger.info(f"read_memory_core COMPLETE query='{query}' duration={duration:.2f}s")
-        return {"graph": graph_data, "bank": bank_data}
+        logger.info(f\"read_memory_core COMPLETE query='{query}' duration={duration:.2f}s\")
+        return {\"graph\": graph_data, \"bank\": bank_data}
     except aiosqlite.OperationalError as e:
-        if "locked" in str(e).lower():
-            return "Database Error: Database is currently locked by another process."
-        return f"Database Error: Query failed. {e}"
+        if \"locked\" in str(e).lower():
+            return \"Database Error: Database is currently locked by another process.\"
+        return f\"Database Error: Query failed. {e}\"
     except Exception as e:
-        log_error("Error in read_memory_core", e)
-        return f"Read Error: {e}"
+        log_error(\"Error in read_memory_core\", e)
+        return f\"Read Error: {e}\"
 
 
 async def get_audit_history_core(limit: int = 20, table_name: str | None = None):
@@ -394,7 +394,7 @@ async def rollback_memory_core(audit_id: int):
     return await management.rollback_memory_logic(audit_id)
 
 
-async def create_snapshot_core(name: str, description: str = ""):
+async def create_snapshot_core(name: str, description: str = \"\"):
     return await management.create_snapshot_logic(name, description)
 
 
@@ -405,7 +405,7 @@ async def restore_snapshot_core(snapshot_id: int):
 async def get_memory_health_core():
     mgmt_health = await management.get_memory_health_logic()
     deep_health = await health.get_comprehensive_diagnostics()
-    deep_health["management_stats"] = mgmt_health
+    deep_health[\"management_stats\"] = mgmt_health
     return deep_health
 
 
@@ -413,12 +413,12 @@ async def repair_memory_core():
     return await bank.repair_memory_logic()
 
 
-async def get_value_report_core(format_type: str = "markdown"):
-    """
+async def get_value_report_core(format_type: str = \"markdown\"):
+    \"\"\"
     Returns an objective value report of the memory server.
     :param format_type: 'markdown' for human reading, 'json' for UI/API integration.
-    """
-    if format_type == "json":
+    \"\"\"
+    if format_type == \"json\":
         metrics_data = await InsightEngine.get_summary_metrics()
         return json.dumps(metrics_data, indent=2, ensure_ascii=False)
 
