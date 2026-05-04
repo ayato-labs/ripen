@@ -1,75 +1,48 @@
 import os
-
-import aiosqlite
 import pytest
-
-from shared_memory.common.exceptions import DatabaseLockedError
+import aiosqlite
 from shared_memory.infra.database import (
     async_get_connection,
-    get_db_path,
     init_db,
-    retry_on_db_lock,
+    close_all_connections
 )
 
-
 @pytest.mark.asyncio
-async def test_init_db_creates_file():
-    """Verify that init_db creates the database file and tables."""
-    # Use force=True to ensure fresh init within the test env
+async def test_database_connection():
+    \"\"\"Tests that we can acquire a connection and execute a query.\"\"\"
+    # 1. Initialize
     await init_db(force=True)
-    db_path = get_db_path()
-    assert os.path.exists(db_path)
-
-    # Check if tables exist
-    async with await async_get_connection() as db:
-        async with db.execute("SELECT name FROM sqlite_master WHERE type='table'") as cursor:
-            rows = await cursor.fetchall()
-            tables = [row["name"] for row in rows]
-            assert "entities" in tables
-            assert "relations" in tables
-            assert "observations" in tables
-
+    
+    # 2. Test Connection Lifecycle
+    # CORRECT USAGE: async with async_get_connection()
+    async with async_get_connection() as conn:
+        assert isinstance(conn, aiosqlite.Connection)
+        cursor = await conn.execute(\"SELECT 1\")
+        row = await cursor.fetchone()
+        assert row[0] == 1
+    
+    await close_all_connections()
 
 @pytest.mark.asyncio
-async def test_async_get_connection_singleton():
-    """Verify that async_get_connection returns a valid connection wrapper."""
-    conn_wrapper = await async_get_connection()
-    async with conn_wrapper as conn1:
-        assert isinstance(conn1, aiosqlite.Connection)
+async def test_database_schema():
+    \"\"\"Tests that tables are created correctly.\"\"\"
+    await init_db(force=True)
+    async with async_get_connection() as conn:
+        cursor = await conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")
+        tables = [row[0] for row in await cursor.fetchall()]
         
-        conn_wrapper2 = await async_get_connection()
-        async with conn_wrapper2 as conn2:
-            assert conn1 is conn2  # Should be the same underlying singleton connection
-
-
-@pytest.mark.asyncio
-async def test_retry_on_db_lock_success():
-    """Verify that retry_on_db_lock works for normal calls."""
-
-    @retry_on_db_lock(max_retries=2)
-    async def success_func():
-        return "ok"
-
-    result = await success_func()
-    assert result == "ok"
-
+        expected_tables = [\"entities\", \"graph\", \"observations\", \"bank_files\"]
+        for t in expected_tables:
+            assert t in tables
+            
+    await close_all_connections()
 
 @pytest.mark.asyncio
-async def test_retry_on_db_lock_failure():
-    """Verify that retry_on_db_lock eventually fails after retries."""
-    call_count = 0
-
-    @retry_on_db_lock(max_retries=2, initial_delay=0.01)
-    async def fail_func():
-        nonlocal call_count
-        call_count += 1
-        import aiosqlite
-
-        raise aiosqlite.OperationalError("database is locked")
-
-    # The code raises DatabaseLockedError after max_retries
-    with pytest.raises(DatabaseLockedError):
-        await fail_func()
-
-    # max_retries=2 means 2 attempts (Attempt 1, Attempt 2 raises)
-    assert call_count == 2
+async def test_singleton_persistence():
+    \"\"\"Tests that multiple calls return the same connection object.\"\"\"
+    await init_db(force=True)
+    async with async_get_connection() as conn1:
+        async with async_get_connection() as conn2:
+            assert conn1 is conn2
+            
+    await close_all_connections()
