@@ -196,11 +196,73 @@ TABLES: Dict[str, Table] = {
     )
 }
 
+# FTS5 Virtual Tables
+FTS_TABLES = {
+    "entities_fts": "USING fts5(name, description, content='entities')",
+    "observations_fts": "USING fts5(entity_name, content, content='observations', content_rowid='id')",
+    "bank_files_fts": "USING fts5(filename, content, content='bank_files')"
+}
+
+# FTS Triggers
+FTS_TRIGGERS = [
+    # Entities
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS entities_ai AFTER INSERT ON entities BEGIN
+        INSERT INTO entities_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+    END;
+    \"\"\",
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
+        INSERT INTO entities_fts(entities_fts, rowid, name, description) VALUES('delete', old.rowid, old.name, old.description);
+    END;
+    \"\"\",
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
+        INSERT INTO entities_fts(entities_fts, rowid, name, description) VALUES('delete', old.rowid, old.name, old.description);
+        INSERT INTO entities_fts(rowid, name, description) VALUES (new.rowid, new.name, new.description);
+    END;
+    \"\"\",
+    # Observations
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
+        INSERT INTO observations_fts(rowid, entity_name, content) VALUES (new.id, new.entity_name, new.content);
+    END;
+    \"\"\",
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
+        INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) VALUES('delete', old.id, old.entity_name, old.content);
+    END;
+    \"\"\",
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
+        INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) VALUES('delete', old.id, old.entity_name, old.content);
+        INSERT INTO observations_fts(rowid, entity_name, content) VALUES (new.id, new.entity_name, new.content);
+    END;
+    \"\"\",
+    # Bank Files
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS bank_files_ai AFTER INSERT ON bank_files BEGIN
+        INSERT INTO bank_files_fts(rowid, filename, content) VALUES (new.rowid, new.filename, new.content);
+    END;
+    \"\"\",
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS bank_files_ad AFTER DELETE ON bank_files BEGIN
+        INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) VALUES('delete', old.rowid, old.filename, old.content);
+    END;
+    \"\"\",
+    \"\"\"
+    CREATE TRIGGER IF NOT EXISTS bank_files_au AFTER UPDATE ON bank_files BEGIN
+        INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) VALUES('delete', old.rowid, old.filename, old.content);
+        INSERT INTO bank_files_fts(rowid, filename, content) VALUES (new.rowid, new.filename, new.content);
+    END;
+    \"\"\"
+]
+
 # 現状のスキーマバージョン (migrations/manager.py と同期)
 CURRENT_SCHEMA_VERSION = 1
 
 def get_create_table_sql(table_name: str) -> str:
-    """テーブル定義から SQLite 用の CREATE TABLE 文を生成する"""
+    \"\"\"テーブル定義から SQLite 用の CREATE TABLE 文を生成する\"\"\"
     table = TABLES[table_name]
     cols = []
     for col in table.columns:
