@@ -1,211 +1,177 @@
 import json
 import os
+import time
+from typing import Any
 
-import aiofiles
+import aiosqlite
 
-from shared_memory.common.config import settings
-from shared_memory.common.utils import (
-    GlobalLock,
-    get_bank_dir,
-    get_logger,
-    log_error,
-    mask_sensitive_data,
-    safe_path_join,
+from shared_memory.common.utils import get_logger, log_error
+from shared_memory.core import search
+from shared_memory.infra.database import (
+    async_get_connection,
+    get_write_semaphore,
+    retry_on_db_lock,
 )
-from shared_memory.infra.database import async_get_connection, update_access
 from shared_memory.infra.embeddings import compute_embeddings_bulk
 
 logger = get_logger("bank")
 
-BANK_FILES = {
-    "projectBrief.md": "Core requirements and goals.",
-    "productContext.md": "Why this project exists and its scope.",
-    "activeContext.md": "What we are working on now and recent decisions.",
-    "systemPatterns.md": "Architecture, design patterns, and technical decisions.",
-    "techContext.md": "Tech stack, dependencies, and constraints.",
-    "progress.md": "Status, roadmap, and what's next.",
-    "decisionLog.md": "Record of significant technical choices.",
-}
 
-# Global lock name for cross-process synchronization
-BANK_LOCK_NAME = "shared_memory_bank"
-
-
-async def initialize_bank():
-    bank_dir = get_bank_dir()
-    if not os.path.exists(bank_dir):
-        os.makedirs(bank_dir)
-    for filename, description in BANK_FILES.items():
-        try:
-            path = safe_path_join(bank_dir, filename)
-            if not os.path.exists(path):
-                async with aiofiles.open(path, mode="w", encoding="utf-8") as f:
-                    await f.write(f"# {filename}\n\n{description}\n\n## Status\n- Initialized\n")
-        except ValueError as e:
-            log_error(f"Initialization skipped for invalid filename: {filename}", e)
+async def read_bank_data() -> dict[str, Any]:
+    \"\"\"Retrieves all data from the knowledge_bank table.\"\"\"
+    try:
+        async with async_get_connection() as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(\"\"\"
+                SELECT filename, content, last_updated, importance
+                FROM knowledge_bank
+            \"\"\" )
+            rows = await cursor.fetchall()
+            return {row["filename"]: dict(row) for row in rows}
+    except Exception as e:
+        log_error("Failed to read bank data", e)
+        return {}
 
 
+@retry_on_db_lock()
 async def save_bank_files(
     bank_files: dict[str, str],
     agent_id: str,
-    conn,
+    conn: aiosqlite.Connection,
     precomputed_vectors: list[list[float]] | None = None,
-):
-    """
-    Saves bank files to disk and DB.
-    Optimized to wrap file operations in a single lock session.
-    """
-    cursor = await conn.execute("SELECT name FROM entities")
-    existing_entities = [r[0] for r in await cursor.fetchall()]
-    bank_dir = get_bank_dir()
-    os.makedirs(bank_dir, exist_ok=True)
-
-    items_to_process = []
+) -> str:
+    \"\"\"Saves multiple files to the knowledge bank using the provided connection.\"\"\"
+    results = []
+    vector_idx = 0
     for filename, content in bank_files.items():
         try:
-            path = safe_path_join(bank_dir, filename)
-            sanitized_filename = os.path.basename(path)
-            masked_content = mask_sensitive_data(content)
-            items_to_process.append(
-                {
-                    "original_filename": filename,
-                    "sanitized_filename": sanitized_filename,
-                    "path": path,
-                    "content": masked_content,
-                    "embedding_text": (f"File: {sanitized_filename}\nContent: {masked_content}"),
-                }
-            )
-        except ValueError as e:
-            log_error(f"Skipping file due to safety violation: {filename}", e)
-
-    if not items_to_process:
-        return "Updated 0 bank files"
-
-    # Get Vectors
-    if precomputed_vectors is not None:
-        vectors = precomputed_vectors
-    else:
-        embedding_texts = [item["embedding_text"] for item in items_to_process]
-        vectors = await compute_embeddings_bulk(embedding_texts)
-
-    # Acquire bank lock once for all file operations
-    async with GlobalLock(BANK_LOCK_NAME):
-        for i, item in enumerate(items_to_process):
-            filename = item["sanitized_filename"]
-            content = item["content"]
-            vector = vectors[i] if i < len(vectors) else None
-            path = item["path"]
-
-            # 1. DB Sync
-            # Using same connection but explicit fetch
-            cursor = await conn.execute(
-                "SELECT content FROM bank_files WHERE filename = ?", (filename,)
-            )
-            old_content_row = await cursor.fetchone()
-            old_data = json.dumps({"content": old_content_row[0]}) if old_content_row else None
-
+            # 1. Update/Insert into knowledge_bank
             await conn.execute(
-                "INSERT OR REPLACE INTO bank_files "
-                "(filename, content, updated_by) VALUES (?, ?, ?)",
+                \"\"\"
+                INSERT INTO knowledge_bank (filename, content, agent_id, last_updated)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(filename) DO UPDATE SET
+                    content = excluded.content,
+                    agent_id = excluded.agent_id,
+                    last_updated = CURRENT_TIMESTAMP
+            \"\"\",
                 (filename, content, agent_id),
             )
+
+            # 2. Update metadata (Importance, etc.)
+            content_id = f"bank:{filename}"
+            from shared_memory.infra.database import update_access
+
+            await update_access(content_id, conn=conn)
+
+            # 3. Handle Vector Persistence
+            if precomputed_vectors and vector_idx < len(precomputed_vectors):
+                vector = precomputed_vectors[vector_idx]
+                vector_idx += 1
+            else:
+                logger.info(f"Computing embedding for bank file: {filename}")
+                vector = await compute_embeddings_bulk([f"File: {filename}\nContent: {content}"])
+                vector = vector[0]
+
             await conn.execute(
-                "INSERT INTO audit_logs (table_name, content_id, action, "
-                "old_data, new_data, agent_id) VALUES (?, ?, ?, ?, ?, ?)",
+                \"\"\"
+                INSERT INTO embedding_cache (content_hash, vector, model_name)
+                VALUES (?, ?, ?)
+                ON CONFLICT(content_hash) DO UPDATE SET vector = excluded.vector
+            \"\"\",
                 (
-                    "bank_files",
-                    filename,
-                    "UPDATE" if old_content_row else "INSERT",
-                    old_data,
-                    json.dumps({"content": content}),
-                    agent_id,
+                    f"bank:{filename}",
+                    json.dumps(vector),
+                    "gemini-text-embedding-004",
                 ),
             )
 
-            # 2. Vector Sync
-            if vector:
-                await conn.execute(
-                    "INSERT OR REPLACE INTO embeddings "
-                    "(content_id, vector, model_name) VALUES (?, ?, ?)",
-                    (filename, json.dumps(vector).encode("utf-8"), settings.embedding_model),
-                )
+            results.append(f"Saved {filename}")
+        except Exception as e:
+            logger.exception(f"Failed to save bank file: {filename}")
+            results.append(f"Error saving {filename}: {e}")
 
-            # 3. Disk Sync
-            async with aiofiles.open(path, mode="w", encoding="utf-8") as f:
-                await f.write(content)
-
-            # 4. Mentions Detection
-            for entity_name in existing_entities:
-                if entity_name.lower() in content.lower():
-                    await conn.execute(
-                        "INSERT OR REPLACE INTO relations "
-                        "(subject, object, predicate, created_by) "
-                        "VALUES (?, ?, ?, ?)",
-                        (filename, entity_name, "mentions", agent_id),
-                    )
-
-    return f"Updated {len(items_to_process)} bank files"
-
-
-async def read_bank_data(query: str | None = None):
-    # Lock for disk read to ensure atomicity
-    logger.info(f"read_bank_data START query={query}")
-    async with GlobalLock(BANK_LOCK_NAME):
-        logger.debug(f"GlobalLock ACQUIRED query={query}")
-        bank_dir = get_bank_dir()
-        bank_data = {}
-        found_files = set()
-
-        # Step 1: Get list of ACTIVE files from DB
-        active_files = []
-        async with await async_get_connection() as conn:
-            cursor = await conn.execute("SELECT filename FROM bank_files WHERE status = 'active'")
-            active_files = [r[0] for r in await cursor.fetchall()]
-
-        if os.path.exists(bank_dir):
-            for filename in os.listdir(bank_dir):
-                if filename.endswith(".md") and filename in active_files:
-                    try:
-                        path = safe_path_join(bank_dir, filename)
-                        async with aiofiles.open(path, encoding="utf-8") as f:
-                            content = await f.read()
-                            if not query or query.lower() in content.lower():
-                                bank_data[filename] = content
-                                found_files.add(filename)
-                                # update_access expects its own connection or nothing
-                                await update_access(filename)
-                    except (Exception, ValueError) as e:
-                        log_error(f"Failed to read bank file {filename}", e)
-
-        # Step 2: Merge with recovering data from DB (only active ones)
-        async with await async_get_connection() as conn:
-            cursor = await conn.execute(
-                "SELECT filename, content FROM bank_files WHERE status = 'active'"
-            )
-            db_files = await cursor.fetchall()
-            for filename, content in db_files:
-                if filename not in found_files:
-                    if not query or query.lower() in content.lower():
-                        # Mark as recovered to avoid confusion
-                        bank_data[f"{filename} [RECOVERED]"] = content
-        logger.info(f"read_bank_data COMPLETE query={query}")
-        return bank_data
+    return ", ".join(results)
 
 
 async def repair_memory_logic():
-    results = []
-    bank_dir = get_bank_dir()
-    if not os.path.exists(bank_dir):
-        os.makedirs(bank_dir)
+    \"\"\"
+    Core logic for checking and repairing memory consistency.
+    Currently: ensures all bank files have corresponding metadata and embeddings.
+    \"\"\"
+    logger.info("Starting memory repair process...")
+    try:
+        async with async_get_connection() as conn:
+            # 1. Find bank files without metadata
+            cursor = await conn.execute(\"\"\"
+                SELECT filename FROM knowledge_bank
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM knowledge_metadata 
+                    WHERE content_id = 'bank:' || filename
+                )
+            \"\"\")
+            orphans = [row[0] for row in await cursor.fetchall()]
 
-    async with await async_get_connection() as conn:
-        cursor = await conn.execute("SELECT filename, content FROM bank_files")
-        files = await cursor.fetchall()
-        count = 0
-        for filename, content in files:
-            path = safe_path_join(bank_dir, filename)
-            async with aiofiles.open(path, mode="w", encoding="utf-8") as f:
-                await f.write(content)
-            count += 1
-        results.append(f"Restored {count} files from DB to disk.")
-    return " | ".join(results)
+            if orphans:
+                logger.info(f"Found {len(orphans)} orphans. Repairing...")
+                from shared_memory.infra.database import update_access
+
+                for filename in orphans:
+                    await update_access(f"bank:{filename}", conn=conn)
+                await conn.commit()
+
+            # 2. Find bank files without embeddings
+            cursor = await conn.execute(\"\"\"
+                SELECT filename, content FROM knowledge_bank
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM embedding_cache 
+                    WHERE content_hash = 'bank:' || filename
+                )
+            \"\"\")
+            missing_embeds = await cursor.fetchall()
+
+            if missing_embeds:
+                logger.info(f"Re-computing {len(missing_embeds)} missing embeddings...")
+                for row in missing_embeds:
+                    filename, content = row
+                    vector = await compute_embeddings_bulk(
+                        [f"File: {filename}\nContent: {content}"]
+                    )
+                    await conn.execute(
+                        \"\"\"
+                        INSERT OR REPLACE INTO embedding_cache (content_hash, vector, model_name)
+                        VALUES (?, ?, ?)
+                    \"\"\",
+                        (
+                            f"bank:{filename}",
+                            json.dumps(vector[0]),
+                            "gemini-text-embedding-004",
+                        ),
+                    )
+                await conn.commit()
+
+            return f"Repair complete. Fixed {len(orphans)} metadata, {len(missing_embeds)} embeddings."
+    except Exception as e:
+        log_error("Memory repair failed", e)
+        return f"Repair failed: {e}"
+
+
+@retry_on_db_lock()
+async def delete_bank_file(filename: str) -> str:
+    \"\"\"Deletes a file from the knowledge bank.\"\"\"
+    try:
+        async with async_get_connection() as conn:
+            await conn.execute(\"\"\"
+                DELETE FROM knowledge_bank WHERE filename = ?
+            \"\"\", (filename,))
+            await conn.execute(\"\"\"
+                DELETE FROM knowledge_metadata WHERE content_id = ?
+            \"\"\", (f"bank:{filename}",))
+            await conn.execute(\"\"\"
+                DELETE FROM embedding_cache WHERE content_hash = ?
+            \"\"\", (f"bank:{filename}",))
+            await conn.commit()
+            return f"Deleted {filename} from bank."
+    except Exception as e:
+        log_error(f"Failed to delete bank file {filename}", e)
+        return f"Error deleting {filename}: {e}"
