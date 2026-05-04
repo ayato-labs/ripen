@@ -33,6 +33,18 @@ def _get_init_lock() -> asyncio.Lock:
     return _INIT_LOCK
 
 
+# Global semaphores mapped by event loop to limit concurrent DB writes
+_WRITE_SEMAPHORES: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+
+
+def get_write_semaphore() -> asyncio.Semaphore:
+    \"\"\"Returns a write semaphore bound to the current event loop.\"\"\"
+    loop = asyncio.get_running_loop()
+    if loop not in _WRITE_SEMAPHORES:
+        _WRITE_SEMAPHORES[loop] = asyncio.Semaphore(1)
+    return _WRITE_SEMAPHORES[loop]
+
+
 # Global flag to track if the main database has been initialized in the current session.
 _DB_INITIALIZED = False
 
@@ -133,6 +145,54 @@ async def async_get_thoughts_connection():
     except Exception as e:
         logger.error(f"Error during thoughts DB operation: {e}")
         raise DatabaseError(f"Thoughts DB operation failed: {e}") from e
+
+
+async def _add_column_if_missing(cursor, table, col_def):
+    \"\"\"
+    Safely adds a column to a table if it doesn't already exist.
+    \"\"\"
+    col_name = col_def.split()[0]
+    await cursor.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in await cursor.fetchall()]
+
+    if col_name in columns:
+        return
+
+    try:
+        await cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+    except aiosqlite.OperationalError as e:
+        log_error(f"CRITICAL: Migration failed for table '{table}' adding '{col_def}'", e)
+        raise DatabaseError(f"Migration failed: {e}") from e
+
+
+async def _async_get_connection_raw(db_path: str, is_thoughts: bool = False):
+    \"\"\"
+    INTERNAL USE ONLY. Returns a connection wrapper without triggering
+    guarded initialization (avoids recursion during init).
+    \"\"\"
+
+    @asynccontextmanager
+    async def _connection_context():
+        global _MAIN_CONNECTION, _THOUGHTS_CONNECTION
+        async with _get_init_lock():
+            if is_thoughts:
+                if _THOUGHTS_CONNECTION is None:
+                    _THOUGHTS_CONNECTION = await aiosqlite.connect(db_path, timeout=30.0)
+                    _THOUGHTS_CONNECTION.row_factory = aiosqlite.Row
+                    await _THOUGHTS_CONNECTION.execute("PRAGMA journal_mode = WAL")
+                    await _THOUGHTS_CONNECTION.execute("PRAGMA synchronous = NORMAL")
+                conn = _THOUGHTS_CONNECTION
+            else:
+                if _MAIN_CONNECTION is None:
+                    _MAIN_CONNECTION = await aiosqlite.connect(db_path, timeout=30.0)
+                    _MAIN_CONNECTION.row_factory = aiosqlite.Row
+                    await _MAIN_CONNECTION.execute("PRAGMA foreign_keys = ON")
+                    await _MAIN_CONNECTION.execute("PRAGMA journal_mode = WAL")
+                    await _MAIN_CONNECTION.execute("PRAGMA synchronous = NORMAL")
+                conn = _MAIN_CONNECTION
+        yield conn
+
+    return _connection_context()
 
 
 async def close_all_connections():
