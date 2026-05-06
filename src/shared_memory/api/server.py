@@ -246,7 +246,7 @@ def _kill_port_process(port: int):
                 subprocess.run(["taskkill", "/F", "/PID", pid], check=True)
     except Exception as e:
         logger.error(
-            "Failed to kill zombie process on port {port}: {error}", port=port, error=e
+            f"Failed to kill zombie process on port {port}: {e}"
         )
 
 
