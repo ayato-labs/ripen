@@ -1,5 +1,5 @@
 ---
-title: "Cursorに教えたルール、Gemini CLIは知っていますか？ ── AI駆動開発の「多重人格」問題を解決するOSSを作った"
+title: "Cursorに教えたルール、Gemini CLIは知っていますか？ ── AI駆動開発の「多重人格障害」を治すOSSを作った"
 emoji: "🧠"
 type: "tech"
 topics: ["mcp", "cursor", "gemini", "ai駆動開発", "oss"]
