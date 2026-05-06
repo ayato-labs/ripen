@@ -215,7 +215,7 @@ async def get_dashboard_html(request):
     <div class="container">
         <header>
             <div class="logo">SharedMemory Dashboard</div>
-            <div class="status-badge">● Systems Active</div>
+            <div class="status-badge">Active Systems</div>
         </header>
 
         <div class="grid">
@@ -223,16 +223,13 @@ async def get_dashboard_html(request):
                 <div class="card">
                     <h2 class="section-title">Conflict Center</h2>
                     <div id="conflicts-list">
-                        <!-- Loading State -->
                         <div class="empty-state">Loading pending conflicts...</div>
                     </div>
                 </div>
 
                 <div class="card">
                     <h2 class="section-title">Activity Timeline</h2>
-                    <div id="timeline" class="timeline">
-                        <!-- Timeline Items -->
-                    </div>
+                    <div id="timeline" class="timeline"></div>
                 </div>
             </main>
 
@@ -254,65 +251,64 @@ async def get_dashboard_html(request):
     </div>
 
     <script>
-        async function fetchHistory() {
-            const res = await fetch('/api/history');
-            const data = await res.json();
-            const timeline = document.getElementById('timeline');
-            timeline.innerHTML = data.map(item => `
-                <div class="timeline-item">
-                    <div class="time">${item.timestamp}</div>
-                    <div class="timeline-content">
-                        <span class="action">${item.action}</span>
-                        <span style="font-weight: 500;">${item.cid}</span>
-                        <span class="agent-name">by ${item.agent}</span>
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">Table: ${item.table}</div>
-                    </div>
-                </div>
-            `).join('');
+        function fetchHistory() {
+            fetch('/api/history')
+                .then(res => res.json())
+                .then(data => {
+                    const timeline = document.getElementById('timeline');
+                    timeline.innerHTML = data.map(item => 
+                        '<div class="timeline-item">' +
+                        '<div class="time">' + item.timestamp + '</div>' +
+                        '<div class="timeline-content">' +
+                        '<span class="action">' + item.action + '</span>' +
+                        '<span style="font-weight: 500;">' + item.cid + '</span>' +
+                        '<span class="agent-name">by ' + item.agent + '</span>' +
+                        '<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">Table: ' + item.table + '</div>' +
+                        '</div></div>'
+                    ).join('');
+                });
         }
 
-        async function fetchConflicts() {
-            const res = await fetch('/api/conflicts');
-            const data = await res.json();
-            const list = document.getElementById('conflicts-list');
-            
-            if (data.length === 0) {
-                list.innerHTML = '<div class="empty-state">No pending conflicts. All knowledge is synchronized.</div>';
-                return;
-            }
-
-            list.innerHTML = data.map(c => `
-                <div class="conflict-item">
-                    <div class="conflict-meta">
-                        <span style="font-weight: 600;">Entity: ${c.entity}</span>
-                        <span class="agent-name">Proposed by ${c.agent}</span>
-                    </div>
-                    <div class="conflict-reason">Contradiction: ${c.reason}</div>
-                    <div class="diff-container">
-                        <div class="diff-box old"><strong>EXISTING:</strong>\n${c.existing}</div>
-                        <div class="diff-box new"><strong>PROPOSED:</strong>\n${c.proposed}</div>
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn-approve" onclick="resolve(${c.id}, 'approve')">Approve & Merge</button>
-                        <button class="btn-reject" onclick="resolve(${c.id}, 'reject')">Reject</button>
-                    </div>
-                </div>
-            `).join('');
+        function fetchConflicts() {
+            fetch('/api/conflicts')
+                .then(res => res.json())
+                .then(data => {
+                    const list = document.getElementById('conflicts-list');
+                    if (data.length === 0) {
+                        list.innerHTML = '<div class="empty-state">No pending conflicts. All knowledge is synchronized.</div>';
+                        return;
+                    }
+                    list.innerHTML = data.map(c => 
+                        '<div class="conflict-item">' +
+                        '<div class="conflict-meta">' +
+                        '<span style="font-weight: 600;">Entity: ' + c.entity + '</span>' +
+                        '<span class="agent-name">Proposed by ' + c.agent + '</span>' +
+                        '</div>' +
+                        '<div class="conflict-reason">Contradiction: ' + c.reason + '</div>' +
+                        '<div class="diff-container">' +
+                        '<div class="diff-box old"><strong>EXISTING:</strong><br>' + c.existing + '</div>' +
+                        '<div class="diff-box new"><strong>PROPOSED:</strong><br>' + c.proposed + '</div>' +
+                        '</div>' +
+                        '<div class="btn-group">' +
+                        '<button class="btn-approve" onclick="resolve(' + c.id + ', \\'approve\\')">Approve & Merge</button>' +
+                        '<button class="btn-reject" onclick="resolve(' + c.id + ', \\'reject\\')">Reject</button>' +
+                        '</div></div>'
+                    ).join('');
+                });
         }
 
-        async function resolve(id, action) {
-            const res = await fetch(`/api/conflicts/${id}/resolve?action=${action}`, { method: 'POST' });
-            if (res.ok) {
-                fetchConflicts();
-                fetchHistory();
-            }
+        function resolve(id, action) {
+            fetch('/api/conflicts/' + id + '/resolve?action=' + action, { method: 'POST' })
+                .then(res => {
+                    if (res.ok) {
+                        fetchConflicts();
+                        fetchHistory();
+                    }
+                });
         }
 
-        // Initial Load
         fetchHistory();
         fetchConflicts();
-        
-        // Polling for real-time feel
         setInterval(fetchHistory, 5000);
         setInterval(fetchConflicts, 5000);
     </script>
@@ -336,7 +332,6 @@ async def api_resolve_conflict(request):
     result = await management.resolve_conflict_logic(conflict_id, action)
     return JSONResponse({"status": "success", "message": result})
 
-# Define Router
 router = Router([
     Route("/history", get_dashboard_html, methods=["GET"]),
     Route("/api/history", api_history, methods=["GET"]),
