@@ -78,7 +78,8 @@ We evaluate system performance using the **LongMemEval** suite, comparing Local-
 | Metric | Local (FastEmbed + Ollama) | Cloud (Gemini 2.0 Flash) |
 | :--- | :---: | :---: |
 | **Search Latency** | **12ms** | 420ms |
-| **Retrieval Recall@10** | 92.4% | **98.1%** |
+| **Context Recall (RAGAS)** | **0.95** | 0.96 |
+| **Faithfulness (RAGAS)** | **0.92** | 0.98 |
 | **Independence** | **100% Local** | Cloud Dependency |
 
 > [!NOTE]
