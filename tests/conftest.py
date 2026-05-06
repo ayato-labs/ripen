@@ -12,6 +12,10 @@ import pytest
 async def setup_teardown_db(request):
     from shared_memory.core.thought_logic import init_thoughts_db
     from shared_memory.infra.database import close_all_connections, init_db
+    from loguru import logger
+
+    # Windows Fix: Clear loguru handlers before test to prevent WinError 32 on rotation
+    logger.remove()
 
     # Standard path resolution for testing - Use a more specific prefix
     home_dir = tempfile.mkdtemp(prefix="sm_test_")
@@ -155,9 +159,10 @@ def mock_llm(request):
     client.aio.models.list.return_value = [model_obj]
 
     patches = [
+        patch("shared_memory.infra.llm.GeminiProvider", return_value=client),
+        patch("shared_memory.infra.llm.OllamaProvider", return_value=client),
         patch("shared_memory.infra.llm.get_llm_provider", return_value=client),
         patch("shared_memory.infra.embeddings.get_gemini_client", return_value=client),
-        patch("shared_memory.core.graph.get_gemini_client", return_value=client),
     ]
 
     for p in patches:
