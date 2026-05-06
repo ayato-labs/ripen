@@ -3,7 +3,6 @@ import os
 from contextvars import ContextVar
 from typing import Optional
 
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from shared_memory.common.utils import get_logger
 

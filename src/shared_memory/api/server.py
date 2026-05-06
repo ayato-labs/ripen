@@ -102,6 +102,10 @@ _original_http_app = FastMCP.http_app
 def _patched_http_app(self, *args, **kwargs) -> Starlette:
     # Use the original http_app but we want to mount our Dashboard and Auth
     app = _original_http_app(self, *args, **kwargs)
+    logger.info("Current middleware stack in Starlette app:")
+    for i, m in enumerate(app.user_middleware):
+        logger.info(f" Middleware {i}: {m.cls} (Bases: {getattr(m.cls, '__bases__', 'N/A')})")
+    
     app.add_middleware(AuthMiddleware)
     # Mount Dashboard routes
     app.mount("/dashboard", dashboard_router)
