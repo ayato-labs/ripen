@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import sys
-import time
 from typing import Any
 
 from fastmcp import FastMCP
@@ -15,7 +14,70 @@ from shared_memory.api.auth import AuthMiddleware, get_current_user
 # Force all OS-level stdout to stderr to prevent breaking the MCP pipe
 sys.stdout = sys.stderr
 
-# --- MCP Protocol and FastMCP Patches ---
+configure_logging()
+logger = get_logger("server")
+
+logger.info("--- SERVER SCRIPT STARTING (Extreme Guard Mode) ---")
+
+# Import core modules with verified paths
+logger.info("Importing core submodules...")
+try:
+    from shared_memory.core import (
+        graph as graph_module,
+        logic as logic_module,
+        thought_logic as thought_module,
+    )
+    from shared_memory.infra.database import init_db
+    from shared_memory.api.dashboard import router as dashboard_router
+
+    logger.info("Core submodules and Dashboard router imported successfully")
+except Exception:
+    logger.exception("Import failure")
+    sys.exit(1)
+
+# --- MCP PROTOCOL PATCH: PERMISSIVE HANDSHAKE ---
+from mcp.server.session import InitializationState, ServerSession
+
+_original_received_request = ServerSession._received_request
+
+
+async def _permissive_received_request(self, responder):
+    """Wait for initialization, or FORCE it if it takes too long."""
+    import asyncio
+
+    try:
+        request_type = type(responder.request.root.params).__name__
+    except Exception:
+        request_type = "UnknownRequest"
+
+    logger.info(f"[MCP SESSION][{id(self)}] Received {request_type}")
+
+    if "InitializeRequest" in request_type:
+        return await _original_received_request(self, responder)
+
+    # Wait for InitializeRequest to be processed
+    retries = 0
+    while self._initialization_state in (
+        InitializationState.NotInitialized,
+        InitializationState.Initializing,
+    ):
+        if retries >= 40:  # 2.0 seconds
+            logger.warning(
+                f"[MCP SESSION][{id(self)}] TIMEOUT waiting for initialization. "
+                "FORCING INITIALIZED state."
+            )
+            self._initialization_state = InitializationState.Initialized
+            break
+        await asyncio.sleep(0.05)
+        retries += 1
+
+    return await _original_received_request(self, responder)
+
+
+ServerSession._received_request = _permissive_received_request
+logger.info("MCP Protocol Patch: ServerSession._received_request is now PERMISSIVE.")
+
+# --- MCP SDK DEEP PATCH: PERMISSIVE VALIDATION & LOGGING ---
 from mcp.types import JSONRPCError, JSONRPCRequest, JSONRPCResponse
 
 
@@ -36,13 +98,15 @@ def _sanitize_mcp_dict(d: Any) -> Any:
 
 
 # Patch FastMCP session handling to be more resilient to string/number mismatches
-from mcp.server.fastmcp.server import RequestResponder, _original_sse_app
+from mcp.server.fastmcp.server import _original_sse_app
 
 
 def _patched_sse_app(self, mount_path: str | None = None) -> Starlette:
     # Use the original sse_app but we might want to wrap routes for logging
     app = _original_sse_app(self, mount_path)
     app.add_middleware(AuthMiddleware)
+    # Mount Dashboard routes
+    app.mount("/", dashboard_router)
     return app
 
 
@@ -55,7 +119,6 @@ _original_handle_post = SseServerTransport.handle_post_message
 
 
 async def _patched_handle_post(self, scope, receive, send):
-    # from starlette.requests import Request (Unused)
     # We can peek at the scope for query params without consuming the body
     query_string = scope.get("query_string", b"").decode()
     session_id = None
@@ -78,22 +141,6 @@ SseServerTransport.handle_post_message = _patched_handle_post
 
 from contextlib import asynccontextmanager
 
-# Delay imports to avoid circular dependency
-from shared_memory.core import (
-    graph as graph_module,
-)
-from shared_memory.core import (
-    logic as logic_module,
-)
-from shared_memory.core import (
-    thought_logic as thought_module,
-)
-from shared_memory.infra.database import init_db
-
-# Configure logging at the entry point
-configure_logging()
-logger = get_logger("api_server")
-
 
 @asynccontextmanager
 async def lifespan(app: FastMCP):
@@ -115,7 +162,9 @@ async def save_memory(
     agent_id: str | None = None,
 ) -> str:
     user = agent_id or get_current_user() or "default_agent"
-    return await logic_module.save_memory_core(entities, relations, observations, bank_files, user)
+    return await logic_module.save_memory_core(
+        entities, relations, observations, bank_files, user
+    )
 
 
 @mcp.tool()
@@ -198,7 +247,9 @@ def _kill_port_process(port: int):
                 logger.warning(f"Killing zombie process {pid} on port {port}")
                 subprocess.run(["taskkill", "/F", "/PID", pid], check=True)
     except Exception as e:
-        logger.error("Failed to kill zombie process on port {port}: {error}", port=port, error=e)
+        logger.error(
+            "Failed to kill zombie process on port {port}: {error}", port=port, error=e
+        )
 
 
 def main():
