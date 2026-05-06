@@ -1,7 +1,7 @@
 import os
 import shutil
 import time
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 import aiosqlite
@@ -83,7 +83,6 @@ async def check_provider_health() -> dict[str, Any]:
     Verifies connectivity and readiness of the configured LLM and Embedding providers.
     """
     from shared_memory.common.config import settings
-    from shared_memory.infra.llm import get_llm_provider
     from shared_memory.infra.embeddings import compute_embedding
 
     results = {}
@@ -110,7 +109,6 @@ async def check_provider_health() -> dict[str, Any]:
     # 2. Check LLM Provider
     llm_start = time.time()
     try:
-        provider = get_llm_provider()
         # We don't want to generate a full response, so we just check if it's reachable
         # For Ollama, we check the base URL. For Gemini, we check the client.
         if settings.llm_provider == "ollama":
@@ -172,8 +170,6 @@ async def get_comprehensive_diagnostics() -> dict[str, Any]:
     if providers["llm"]["status"] != "healthy":
         overall_status = "unhealthy"
         issues.append(f"LLM Provider ({providers['llm']['provider']}) is unreachable")
-
-    from datetime import datetime
 
     return {
         "timestamp": datetime.now(UTC).isoformat(),

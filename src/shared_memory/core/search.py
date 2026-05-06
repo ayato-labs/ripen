@@ -282,8 +282,13 @@ async def synthesize_knowledge(entity_name: str):
                 )
             )
             
-            system_instruction = "You are a high-precision knowledge synthesis engine. Distill technical facts with absolute accuracy."
-            summary = await provider.generate_content(prompt=prompt, system_instruction=system_instruction)
+            system_instruction = (
+                "You are a high-precision knowledge synthesis engine. "
+                "Distill technical facts with absolute accuracy."
+            )
+            summary = await provider.generate_content(
+                prompt=prompt, system_instruction=system_instruction
+            )
             return summary
         except Exception as e:
             logger.error(f"Synthesis failed for {entity_name}: {e}")
@@ -308,10 +313,15 @@ async def synthesize_entity_detailed(entity_name: str, observations: list[dict])
     Identify any conflicts or changes over time.
     Return only the summary.
     """
-    system_instruction = "You are a high-precision knowledge synthesis engine. Distill technical facts with absolute accuracy."
+    system_instruction = (
+        "You are a high-precision knowledge synthesis engine. "
+        "Distill technical facts with absolute accuracy."
+    )
 
     try:
-        summary = await provider.generate_content(prompt=prompt, system_instruction=system_instruction)
+        summary = await provider.generate_content(
+            prompt=prompt, system_instruction=system_instruction
+        )
         return summary
     except Exception as e:
         logger.error(f"Synthesis failed: {e}")

@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch, AsyncMock
 
 from shared_memory.core.graph import extract_hashtags, save_tags
 from tests.unit.fake_client import FakeGeminiClient
@@ -12,9 +13,17 @@ async def test_extract_hashtags_success(monkeypatch):
     # Set fake AI response
     fake_client.models.set_response("generate_content", '["#ai", "Machine Learning"]')
     
-    monkeypatch.setattr("shared_memory.core.graph.get_gemini_client", lambda: fake_client)
-    
-    tags = await extract_hashtags("This is a post about AI and Machine Learning.")
+    # Force AI usage by lowering threshold
+    with patch("shared_memory.core.graph.settings") as mock_settings:
+        mock_settings.hashtag_ai_threshold = 0
+        # Mocking the provider
+        class FakeProvider:
+            async def generate_content(self, prompt, system_instruction=None):
+                resp = fake_client.models.generate_content(model="fake", contents=prompt)
+                return resp.text
+
+        with patch("shared_memory.core.graph.get_llm_provider", return_value=FakeProvider()):
+            tags = await extract_hashtags("This is a post about AI and Machine Learning.")
     
     assert "#ai" in tags
     assert "#machinelearning" in tags # Normalization test
@@ -41,3 +50,10 @@ async def test_save_tags_persistence(db_conn):
     assert "#test" in saved_tags
     assert "#unit" in saved_tags
     assert len(saved_tags) == 2
+
+@pytest.mark.asyncio
+async def test_save_tags_error(db_conn):
+    """Verify that tag saving handles database errors gracefully."""
+    # This test might need more sophisticated mocking if we want to force an error
+    # but for now we just verify it doesn't crash if we pass garbage.
+    await save_tags(None, None, ["#error"], db_conn) # Should log and return

@@ -1,11 +1,16 @@
-import datetime
 import json
 import os
 import shutil
+from datetime import datetime
 
 import numpy as np
 
-from shared_memory.common.utils import calculate_importance, get_db_path, log_error, get_logger
+from shared_memory.common.utils import (
+    calculate_importance,
+    get_db_path,
+    get_logger,
+    log_error,
+)
 from shared_memory.infra.database import async_get_connection
 
 logger = get_logger("management")
@@ -17,7 +22,7 @@ async def create_snapshot_logic(name: str, description: str = ""):
     if not os.path.exists(snapshot_dir):
         os.makedirs(snapshot_dir)
 
-    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     snapshot_file = os.path.join(snapshot_dir, f"snapshot_{ts}.db")
 
     try:

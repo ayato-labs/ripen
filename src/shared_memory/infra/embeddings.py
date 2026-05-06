@@ -1,7 +1,5 @@
 import hashlib
 import json
-import os
-import time
 from typing import Any
 
 from shared_memory.common.config import settings
@@ -75,8 +73,8 @@ async def compute_embedding(
     compute_map = []
 
     # Cache key includes model name to prevent collisions between different engines
-    engine_prefix = settings.embedding_engine
     model_name = settings.embedding_model
+    logger.debug(f"Checking cache for {len(valid_entries)} entries using model {model_name}")
 
     async def _process_cache(db):
         for original_idx, txt in valid_entries:

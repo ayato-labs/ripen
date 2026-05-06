@@ -13,14 +13,14 @@ from shared_memory.common.exceptions import SecurityError
 
 def configure_logging():
     """
-    Configures Loguru to output JSON to files and human-readable text to stderr.
-    - Keeps only the last 2 execution logs (logs/server.jsonl).
-    - Isolates all errors to a separate file (logs/error.log).
+    Configures Loguru for structured JSON logging.
+    - Rotates on every startup to track separate executions.
+    - Keeps exactly the last 2 execution logs (logs/server.jsonl).
+    - Isolates errors to logs/error.log.
     """
     logger.remove()
 
     # 1. Human-readable output to stderr (Development)
-    # Using a cleaner format for stderr
     stderr_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
         "<level>{level:7}</level> | "
@@ -39,14 +39,15 @@ def configure_logging():
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
 
-    # 2. Main Structured JSON log (Rotates at 10MB, keep 2 runs)
+    # 2. Main Structured JSON log
+    # rotation=0 ensures it rotates immediately if the file already exists from a previous run.
     logger.add(
         "logs/server.jsonl",
         format="{message}",
         level="DEBUG",
         serialize=True,
-        rotation="10 MB",              # More resilient on Windows than startup-forced
-        retention=2,                   # Keep only the last 2 execution logs
+        rotation=0,
+        retention=2,
         encoding="utf-8",
     )
 
@@ -55,7 +56,7 @@ def configure_logging():
         "logs/error.log",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:7} | {name}:{function}:{line} - {message}",
         level="ERROR",
-        serialize=False,  # Error log stays human-readable for quick triage
+        serialize=False,
         rotation="10 MB",
         retention="30 days",
         backtrace=True,
@@ -63,7 +64,8 @@ def configure_logging():
         encoding="utf-8",
     )
 
-    logger.info("Logging infrastructure initialized (JSON enabled, Error isolation active)")
+    logger.info("Logging infrastructure initialized (JSON enabled, Startup rotation active)")
+
 
 def get_logger(name: str):
     """

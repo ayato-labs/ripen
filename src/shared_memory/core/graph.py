@@ -13,10 +13,7 @@ from shared_memory.common.utils import (
 )
 from shared_memory.core.ai_control import AIRateLimiter
 from shared_memory.infra.database import async_get_connection
-from shared_memory.infra.embeddings import (
-    compute_embeddings_bulk,
-    get_gemini_client,
-)
+from shared_memory.infra.embeddings import compute_embeddings_bulk
 from shared_memory.infra.llm import get_llm_provider
 
 logger = get_logger("graph")
@@ -32,6 +29,7 @@ STOP_WORDS = {
     "currently", "named", "using", "through", "during", "actually", 
     "basically", "simply"
 }
+
 
 
 async def extract_hashtags(content: str) -> list[str]:
@@ -85,7 +83,9 @@ async def extract_hashtags_ai(content: str) -> list[str]:
             f"TEXT:\n{content}"
         )
 
-        system_instruction = "You are a specialized keyword extraction engine. Return only a JSON list."
+        system_instruction = (
+            "You are a specialized keyword extraction engine. Return only a JSON list."
+        )
         
         response_text = await provider.generate_content(
             prompt=prompt,
@@ -184,7 +184,9 @@ async def _check_conflicts_internal(
     )
 
     provider = get_llm_provider()
-    system_instruction = "You are a rigorous Fact-Checking Engine. Identify logical contradictions with precision."
+    system_instruction = (
+        "You are a rigorous Fact-Checking Engine. Identify logical contradictions with precision."
+    )
 
     try:
         response_text = await provider.generate_content(
@@ -291,6 +293,7 @@ async def save_entities(
             )
             importance = 5
 
+        logger.debug(f"Preparing entity: {name} ({e_type})")
         items_to_process.append(
             {
                 "name": name,

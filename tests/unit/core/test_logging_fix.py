@@ -15,7 +15,11 @@ async def test_auto_distill_knowledge_logging_fix():
         "500 INTERNAL. {'error': {'code': 500, 'message': 'Internal error encountered.'}}"
     )
     
-    with patch("shared_memory.core.distiller.get_gemini_client", return_value=mock_client), \
+    class FakeProvider:
+        async def generate_content(self, prompt, system_instruction=None):
+            return await mock_client.aio.models.generate_content(prompt, system_instruction)
+
+    with patch("shared_memory.core.distiller.get_llm_provider", return_value=FakeProvider()), \
          patch("shared_memory.core.distiller.AIRateLimiter.throttle", AsyncMock()):
         
         # This should NOT raise KeyError even though the exception string has braces

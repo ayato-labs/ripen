@@ -66,7 +66,9 @@ async def auto_distill_knowledge(session_id: str, thought_history: list[dict[str
     """
 
     try:
-        system_instruction = "You are a high-precision knowledge extraction engine. Output only structured JSON."
+        system_instruction = (
+            "You are a high-precision knowledge extraction engine. Output only structured JSON."
+        )
         
         response_text = await provider.generate_content(
             prompt=prompt,
@@ -129,7 +131,9 @@ async def incremental_distill_knowledge(session_id: str, thought: str):
     }}
     """
     try:
-        system_instruction = "You are a high-precision knowledge extraction engine. Output only structured JSON."
+        system_instruction = (
+            "You are a high-precision knowledge extraction engine. Output only structured JSON."
+        )
         
         response_text = await provider.generate_content(
             prompt=prompt,

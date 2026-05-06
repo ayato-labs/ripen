@@ -1,4 +1,5 @@
-from unittest.mock import patch
+import os
+from unittest.mock import patch, AsyncMock
 
 import pytest
 
@@ -50,21 +51,17 @@ async def test_normalize_bank_files():
 @pytest.mark.asyncio
 async def test_save_memory_core_basic(fake_client):
     # Use patch to inject fake client WITHOUT MagicMock for the logic being tested
-    # Although we use patch, the object returned is FakeGeminiClient which is real code.
     with patch("shared_memory.infra.embeddings.get_gemini_client", return_value=fake_client):
-        with patch("shared_memory.core.graph.get_gemini_client", return_value=fake_client):
-            result = await logic.save_memory_core(
-                entities=["UnitEntity"],
-                observations=[{"content": "Unit content", "entity_name": "UnitEntity"}]
-            )
-            assert "Saved 1 entities" in result
-            assert "Saved 1 observations" in result
+        result = await logic.save_memory_core(
+            entities=["UnitEntity"],
+            observations=[{"content": "Unit content", "entity_name": "UnitEntity"}]
+        )
+        assert "Saved 1 entities" in result
+        assert "Saved 1 observations" in result
 
 @pytest.mark.asyncio
-async def test_save_memory_core_ai_error(fake_client):
-    # Simulate AI failure
-    fake_client.models.set_error("embed_content", Exception("AI Down"))
-    
-    with patch("shared_memory.infra.embeddings.get_gemini_client", return_value=fake_client):
+async def test_save_memory_core_ai_error():
+    # Simulate AI failure by patching the bulk computation directly
+    with patch("shared_memory.core.logic.compute_embeddings_bulk", side_effect=Exception("AI Down")):
         result = await logic.save_memory_core(entities=["ErrorEntity"])
         assert "AI Error" in result
