@@ -41,7 +41,7 @@ _original_received_request = ServerSession._received_request
 
 
 async def _permissive_received_request(self, responder):
-    \"\"\"Wait for initialization, or FORCE it if it takes too long.\"\"\"
+    """Wait for initialization, or FORCE it if it takes too long."""
     import asyncio
 
     try:
@@ -80,7 +80,7 @@ logger.info("MCP Protocol Patch: ServerSession._received_request is now PERMISSI
 
 
 def _sanitize_mcp_dict(d: Any) -> Any:
-    \"\"\"Recursively converts all string numbers to actual numbers for MCP validation.\"\"\"
+    """Recursively converts all string numbers to actual numbers for MCP validation."""
     if isinstance(d, dict):
         return {k: _sanitize_mcp_dict(v) for k, v in d.items()}
     elif isinstance(d, list):
@@ -142,7 +142,7 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastMCP):
-    \"\"\"Ensure database is ready before server starts accepting work.\"\"\"
+    """Ensure database is ready before server starts accepting work."""
     asyncio.create_task(init_db())
     yield
 
@@ -159,7 +159,7 @@ async def save_memory(
     bank_files: dict | None = None,
     agent_id: str | None = None,
 ) -> str:
-    user = agent_id or get_current_user() or \"default_agent\"
+    user = agent_id or get_current_user() or "default_agent"
     return await logic_module.save_memory_core(
         entities, relations, observations, bank_files, user
     )
@@ -195,7 +195,7 @@ async def sequential_thinking(
     is_revision: bool | None = None,
     revises_thought: int | None = None,
 ) -> str:
-    user = get_current_user() or \"default_agent\"
+    user = get_current_user() or "default_agent"
     result = await thought_module.process_thought_core(
         thought=thought,
         thought_number=thought_number,
@@ -214,7 +214,7 @@ async def sequential_thinking(
 @mcp.tool()
 async def manage_knowledge_activation(ids: Any, status: str) -> str:
     await logic_module.manage_knowledge_activation_core(ids, status)
-    return f\"Status updated to {status}.\"
+    return f"Status updated to {status}."
 
 
 @mcp.tool()
@@ -224,7 +224,7 @@ async def list_inactive_knowledge() -> str:
 
 
 @mcp.tool()
-async def get_insights(format: str = \"markdown\") -> str:
+async def get_insights(format: str = "markdown") -> str:
     return await logic_module.get_value_report_core(format)
 
 
@@ -237,16 +237,16 @@ def _kill_port_process(port: int):
     try:
         import subprocess
 
-        cmd = f\"netstat -ano | findstr :{port}\"
+        cmd = f"netstat -ano | findstr :{port}"
         output = subprocess.check_output(cmd, shell=True).decode()
-        for line in output.strip().split(\"\n\"):
-            if \"LISTENING\" in line:
+        for line in output.strip().split("\n"):
+            if "LISTENING" in line:
                 pid = line.strip().split()[-1]
-                logger.warning(f\"Killing zombie process {pid} on port {port}\")
-                subprocess.run([\"taskkill\", \"/F\", \"/PID\", pid], check=True)
+                logger.warning(f"Killing zombie process {pid} on port {port}")
+                subprocess.run(["taskkill", "/F", "/PID", pid], check=True)
     except Exception as e:
         logger.error(
-            \"Failed to kill zombie process on port {port}: {error}\", port=port, error=e
+            "Failed to kill zombie process on port {port}: {error}", port=port, error=e
         )
 
 
@@ -254,8 +254,8 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(\"--sse\", action=\"store_true\")
-    parser.add_argument(\"--port\", type=int, default=8377)
+    parser.add_argument("--sse", action="store_true")
+    parser.add_argument("--port", type=int, default=8377)
     args = parser.parse_args()
 
     # --- LLM CONFIG CHECK ---
@@ -271,19 +271,19 @@ def main():
         )
     if args.sse:
         _kill_port_process(args.port)
-        mcp.run(transport=\"sse\", port=args.port)
+        mcp.run(transport="sse", port=args.port)
     else:
-        mcp.run(transport=\"stdio\")
+        mcp.run(transport="stdio")
 
 
 async def wait_for_background_tasks(timeout: float = 5.0):
-    \"\"\"
+    """
     Waits for all background tasks to complete or timeout.
     Used during server shutdown and test teardown.
-    \"\"\"
+    """
     # This is a stub for the actual background task tracker if implemented
     await asyncio.sleep(0.1)
 
 
-if __name__ == \"__main__\":
+if __name__ == "__main__":
     main()
