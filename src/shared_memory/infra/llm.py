@@ -2,7 +2,6 @@ import abc
 import json
 import httpx
 from loguru import logger
-from google import genai
 
 from shared_memory.common.config import settings
 from shared_memory.core.ai_control import AIRateLimiter, retry_on_ai_quota
@@ -25,10 +24,15 @@ class GeminiProvider(LlmProvider):
 
     def _get_client(self):
         if self._client is None:
-            api_key = settings.api_key
-            if not api_key:
-                return None
-            self._client = genai.Client(api_key=api_key)
+            try:
+                from google import genai
+                api_key = settings.api_key
+                if not api_key:
+                    return None
+                self._client = genai.Client(api_key=api_key)
+            except ImportError:
+                logger.error("google-genai not installed. Please install it to use Gemini.")
+                raise
         return self._client
 
     @retry_on_ai_quota(max_retries=3, rotate_models=True)
