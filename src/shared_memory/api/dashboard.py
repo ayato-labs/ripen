@@ -252,7 +252,7 @@ async def get_dashboard_html(request):
 
     <script>
         function fetchHistory() {
-            fetch('/api/history')
+            fetch('api/history')
                 .then(res => res.json())
                 .then(data => {
                     const timeline = document.getElementById('timeline');
@@ -270,7 +270,7 @@ async def get_dashboard_html(request):
         }
 
         function fetchConflicts() {
-            fetch('/api/conflicts')
+            fetch('api/conflicts')
                 .then(res => res.json())
                 .then(data => {
                     const list = document.getElementById('conflicts-list');
@@ -298,7 +298,7 @@ async def get_dashboard_html(request):
         }
 
         function resolve(id, action) {
-            fetch('/api/conflicts/' + id + '/resolve?action=' + action, { method: 'POST' })
+            fetch('api/conflicts/' + id + '/resolve?action=' + action, { method: 'POST' })
                 .then(res => {
                     if (res.ok) {
                         fetchConflicts();

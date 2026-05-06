@@ -104,7 +104,7 @@ def _patched_http_app(self, *args, **kwargs) -> Starlette:
     app = _original_http_app(self, *args, **kwargs)
     app.add_middleware(AuthMiddleware)
     # Mount Dashboard routes
-    app.mount("/", dashboard_router)
+    app.mount("/dashboard", dashboard_router)
     return app
 
 
