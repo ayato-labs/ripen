@@ -1,4 +1,3 @@
-import asyncio
 import json
 import re
 from collections import Counter
@@ -11,7 +10,6 @@ from shared_memory.common.utils import (
     log_error,
     mask_sensitive_data,
 )
-from shared_memory.core.ai_control import AIRateLimiter
 from shared_memory.infra.database import async_get_connection
 from shared_memory.infra.embeddings import compute_embeddings_bulk
 from shared_memory.infra.llm import get_llm_provider
@@ -19,17 +17,87 @@ from shared_memory.infra.llm import get_llm_provider
 logger = get_logger("graph")
 
 STOP_WORDS = {
-    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
-    "at", "by", "for", "with",
-    "is", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did",
-    "i", "you", "he", "she", "it", "we", "they", "my", "your", "his", "her", "its", "our", "their",
-    "this", "that", "these", "those", "which", "who", "whom", "whose", "where", "how", "why",
-    "can", "could", "shall", "should", "will", "would", "may", "might", "must",
-    "in", "on", "to", "from", "up", "down", "out", "of", "about", "above", "below", "between",
-    "currently", "named", "using", "through", "during", "actually", 
-    "basically", "simply"
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "if",
+    "then",
+    "else",
+    "when",
+    "at",
+    "by",
+    "for",
+    "with",
+    "is",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "my",
+    "your",
+    "his",
+    "her",
+    "its",
+    "our",
+    "their",
+    "this",
+    "that",
+    "these",
+    "those",
+    "which",
+    "who",
+    "whom",
+    "whose",
+    "where",
+    "how",
+    "why",
+    "can",
+    "could",
+    "shall",
+    "should",
+    "will",
+    "would",
+    "may",
+    "might",
+    "must",
+    "in",
+    "on",
+    "to",
+    "from",
+    "up",
+    "down",
+    "out",
+    "of",
+    "about",
+    "above",
+    "below",
+    "between",
+    "currently",
+    "named",
+    "using",
+    "through",
+    "during",
+    "actually",
+    "basically",
+    "simply",
 }
-
 
 
 async def extract_hashtags(content: str) -> list[str]:
@@ -43,7 +111,7 @@ async def extract_hashtags(content: str) -> list[str]:
     # Choose strategy based on length
     if len(content) < settings.hashtag_ai_threshold:
         return extract_hashtags_logic(content)
-    
+
     return await extract_hashtags_ai(content)
 
 
@@ -55,10 +123,7 @@ def extract_hashtags_logic(content: str, max_tags: int = 5) -> list[str]:
     words = re.findall(r"\w+", content.lower())
 
     # 2. Filter: length > 3, not a stopword, not purely numeric
-    filtered = [
-        w for w in words
-        if len(w) > 3 and w not in STOP_WORDS and not w.isdigit()
-    ]
+    filtered = [w for w in words if len(w) > 3 and w not in STOP_WORDS and not w.isdigit()]
 
     # 3. Frequency count
     counts = Counter(filtered)
@@ -86,15 +151,14 @@ async def extract_hashtags_ai(content: str) -> list[str]:
         system_instruction = (
             "You are a specialized keyword extraction engine. Return only a JSON list."
         )
-        
+
         response_text = await provider.generate_content(
-            prompt=prompt,
-            system_instruction=system_instruction
+            prompt=prompt, system_instruction=system_instruction
         )
         # Handle cases where the model might wrap the JSON in code blocks
         clean_json = re.sub(r"```json|```", "", response_text).strip()
         tags = json.loads(clean_json)
-        
+
         if isinstance(tags, list):
             cleaned = []
             for t_raw in tags:
@@ -121,14 +185,12 @@ async def save_tags(content_id: str, content_type: str, tags: list[str], conn):
     try:
         # 1. Delete old tags
         await conn.execute(
-            "DELETE FROM tags WHERE content_id = ? AND content_type = ?",
-            (content_id, content_type)
+            "DELETE FROM tags WHERE content_id = ? AND content_type = ?", (content_id, content_type)
         )
         # 2. Insert new tags
         data = [(t, content_id, content_type) for t in tags]
         await conn.executemany(
-            "INSERT OR IGNORE INTO tags (tag, content_id, content_type) VALUES (?, ?, ?)",
-            data
+            "INSERT OR IGNORE INTO tags (tag, content_id, content_type) VALUES (?, ?, ?)", data
         )
     except Exception as e:
         logger.error(f"Failed to save tags for {content_id}: {e}")
@@ -150,17 +212,13 @@ async def check_conflict(entity_name: str, new_contents: list[str], agent_id: st
                     entity_name, new_contents, agent_id, managed_conn
                 )
         else:
-            return await _check_conflicts_internal(
-                entity_name, new_contents, agent_id, conn
-            )
+            return await _check_conflicts_internal(entity_name, new_contents, agent_id, conn)
     except Exception as e:
         log_error("Conflict check failed", e)
         raise e
 
 
-async def _check_conflicts_internal(
-    entity_name: str, new_contents: list[str], agent_id: str, conn
-):
+async def _check_conflicts_internal(entity_name: str, new_contents: list[str], agent_id: str, conn):
     # Fetch up to 5 most recent observations for richer context
     cursor = await conn.execute(
         "SELECT content FROM observations WHERE entity_name = ? ORDER BY timestamp DESC LIMIT 5",
@@ -190,18 +248,17 @@ async def _check_conflicts_internal(
 
     try:
         response_text = await provider.generate_content(
-            prompt=prompt,
-            system_instruction=system_instruction
+            prompt=prompt, system_instruction=system_instruction
         )
         clean_json = re.sub(r"```json|```", "", response_text).strip()
         data = json.loads(clean_json)
-        
+
         results = []
         if isinstance(data, list) and len(data) == len(new_contents):
             results = data
         elif isinstance(data, dict):
             results = [data] * len(new_contents)
-        
+
         if not results:
             return [(False, None)] * len(new_contents)
 
@@ -236,8 +293,6 @@ async def _check_conflicts_internal(
         return [(True, reason)] * len(new_contents)
 
 
-
-
 async def search_by_tags(tags: list[str], conn) -> list[str]:
     """
     Returns content_ids that match ANY of the given tags.
@@ -248,8 +303,7 @@ async def search_by_tags(tags: list[str], conn) -> list[str]:
     placeholders = ",".join(["?"] * len(tags))
     try:
         cursor = await conn.execute(
-            f"SELECT DISTINCT content_id FROM tags WHERE tag IN ({placeholders})",
-            tags
+            f"SELECT DISTINCT content_id FROM tags WHERE tag IN ({placeholders})", tags
         )
         rows = await cursor.fetchall()
         return [r[0] for r in rows]
@@ -287,7 +341,6 @@ async def save_entities(
         try:
             importance = max(1, min(10, int(importance)))
         except (ValueError, TypeError):
-
             get_logger("graph").debug(
                 f"Invalid importance value for {name}: {importance}. Defaulting to 5."
             )

@@ -1,16 +1,16 @@
 import json
 import os
 from contextvars import ContextVar
-from typing import Optional
 
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse  # noqa: F401
 
 from shared_memory.common.utils import get_logger
 
 logger = get_logger("auth")
 
 # Context variable to hold the authenticated account name for the current request/task
-current_user: ContextVar[Optional[str]] = ContextVar("current_user", default=None)
+current_user: ContextVar[str | None] = ContextVar("current_user", default=None)
+
 
 class AuthMiddleware:
     def __init__(self, app, auth_file_path: str = "data/auth.json"):
@@ -21,12 +21,14 @@ class AuthMiddleware:
     def _load_auth_data(self):
         """Loads account:api_key pairs from the auth file."""
         if not os.path.exists(self.auth_file_path):
-            logger.warning(f"Auth file not found at {self.auth_file_path}. Authentication will be disabled or fail.")
+            logger.warning(
+                f"Auth file not found at {self.auth_file_path}. Authentication will be disabled or fail."
+            )
             self.auth_data = {}
             return
-        
+
         try:
-            with open(self.auth_file_path, "r", encoding="utf-8") as f:
+            with open(self.auth_file_path, encoding="utf-8") as f:
                 self.auth_data = json.load(f)
             logger.info(f"Loaded {len(self.auth_data)} accounts from {self.auth_file_path}")
         except Exception as e:
@@ -40,7 +42,7 @@ class AuthMiddleware:
         # 1. Extract API Key from headers directly from scope
         api_key = None
         headers = dict(scope.get("headers", []))
-        
+
         # Headers are byte strings in scope
         x_api_key = headers.get(b"x-api-key")
         if x_api_key:
@@ -78,6 +80,7 @@ class AuthMiddleware:
         finally:
             current_user.reset(token)
 
-def get_current_user() -> Optional[str]:
+
+def get_current_user() -> str | None:
     """Returns the authenticated account name for the current context."""
     return current_user.get()

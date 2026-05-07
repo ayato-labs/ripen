@@ -1,16 +1,13 @@
 import json
+import re
 from typing import Any
 
-from shared_memory.common.config import settings
 from shared_memory.common.utils import get_logger, log_error, log_info
 from shared_memory.core import logic
-from shared_memory.core.ai_control import AIRateLimiter, retry_on_ai_quota
-from shared_memory.infra.embeddings import get_gemini_client
+from shared_memory.core.ai_control import retry_on_ai_quota
+from shared_memory.infra.llm import get_llm_provider
 
 logger = get_logger("distiller")
-
-
-from shared_memory.infra.llm import get_llm_provider
 
 
 @retry_on_ai_quota(max_retries=3)
@@ -22,7 +19,7 @@ async def auto_distill_knowledge(session_id: str, thought_history: list[dict[str
         return
 
     provider = get_llm_provider()
-    
+
     # 1. Format thoughts for the prompt
     formatted_thoughts = "\n".join(
         [f"Step {t['thought_number']}: {t['thought']}" for t in thought_history]
@@ -69,13 +66,12 @@ async def auto_distill_knowledge(session_id: str, thought_history: list[dict[str
         system_instruction = (
             "You are a high-precision knowledge extraction engine. Output only structured JSON."
         )
-        
+
         response_text = await provider.generate_content(
             prompt=prompt,
             system_instruction=system_instruction
         )
 
-        import re
         clean_json = re.sub(r"```json|```", "", response_text).strip()
         extracted_data = json.loads(clean_json)
 
@@ -134,13 +130,12 @@ async def incremental_distill_knowledge(session_id: str, thought: str):
         system_instruction = (
             "You are a high-precision knowledge extraction engine. Output only structured JSON."
         )
-        
+
         response_text = await provider.generate_content(
             prompt=prompt,
             system_instruction=system_instruction
         )
-        
-        import re
+
         clean_json = re.sub(r"```json|```", "", response_text).strip()
         extracted = json.loads(clean_json)
 

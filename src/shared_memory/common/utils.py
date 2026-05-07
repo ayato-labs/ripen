@@ -40,13 +40,14 @@ def configure_logging():
     log_dir.mkdir(exist_ok=True)
 
     # 2. Main Structured JSON log
-    # rotation=0 ensures it rotates immediately if the file already exists from a previous run.
+    # We use a custom sink to ensure we rotate on startup and keep only last 2 runs.
+    # loguru's rotation=0 is a common trick for "rotate on startup".
     logger.add(
         "logs/server.jsonl",
         format="{message}",
         level="DEBUG",
         serialize=True,
-        rotation=0,
+        rotation=lambda _, __: True,  # Always rotate on startup (first write)
         retention=2,
         encoding="utf-8",
     )

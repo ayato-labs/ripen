@@ -1,9 +1,8 @@
-import json
-
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, Router
 
 from shared_memory.ops import management
+
 
 async def get_dashboard_html(request):
     html_content = """
@@ -319,20 +318,24 @@ async def get_dashboard_html(request):
 """
     return HTMLResponse(content=html_content)
 
+
 async def api_history(request):
     limit = int(request.query_params.get("limit", 20))
     history = await management.get_audit_history_logic(limit=limit)
     return JSONResponse(history)
 
+
 async def api_conflicts(request):
     conflicts = await management.get_unresolved_conflicts_logic()
     return JSONResponse(conflicts)
+
 
 async def api_resolve_conflict(request):
     conflict_id = int(request.path_params.get("id"))
     action = request.query_params.get("action", "approve")
     result = await management.resolve_conflict_logic(conflict_id, action)
     return JSONResponse({"status": "success", "message": result})
+
 
 router = Router([
     Route("/history", get_dashboard_html, methods=["GET"]),
