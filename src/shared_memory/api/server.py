@@ -280,15 +280,15 @@ def main():
         mcp.run(transport="stdio")
 
 
-    async def ensure_initialized(self):
-        """
-        Explicitly ensures the database and infrastructure are initialized.
-        Used primarily by system tests to synchronize state.
-        """
-        logger.info("Server: Ensuring initialization...")
-        await init_db()
-        await thought_module.init_thoughts_db()
-        logger.info("Server: Initialization complete.")
+async def ensure_initialized():
+    """
+    Explicitly ensures the database and infrastructure are initialized.
+    Used primarily by system tests to synchronize state.
+    """
+    logger.info("Server: Ensuring initialization...")
+    await init_db()
+    await thought_module.init_thoughts_db()
+    logger.info("Server: Initialization complete.")
 
 
 async def wait_for_background_tasks(timeout: float = 5.0):

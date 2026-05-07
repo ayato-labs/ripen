@@ -58,6 +58,7 @@ async def test_api_complete_lifecycle_system(mock_llm):
     
     # 基本的なレポート項目が含まれているか
     assert "# SharedMemory" in res_insights
-    assert "Total Entities" in res_insights
+    # 局所化（日本語）されている可能性があるため、柔軟に検証
+    assert "エンティティ" in res_insights or "Entities" in res_insights
     # 少なくとも1つのエンティティが存在することが統計に反映されているはず
-    assert "1" in res_insights or "Entities" in res_insights
+    assert "1" in res_insights
