@@ -9,40 +9,45 @@ from loguru import logger
 class ModelManager:
     """
     Manages Generative AI model rotation for fallback.
-    LLM only. NEVER rotate embedding models.
+    Supports multiple pools (generation, compression).
     """
 
     def __init__(self):
         self._lock = None
-        self.current_index = 0
-        self._models = None
+        self._indices = {"generation": 0, "compression": 0}
+        self._models = {}
 
     def _get_lock(self):
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
 
-    @property
-    def models(self):
-        if self._models is None:
-            from shared_memory.common.config import GOOGLE_AI_MODELS
+    def _get_pool(self, pool_name: str):
+        if pool_name not in self._models:
+            from shared_memory.common.config import GOOGLE_AI_MODELS, GOOGLE_COMPRESSION_MODELS
 
-            self._models = GOOGLE_AI_MODELS
-        return self._models
+            if pool_name == "compression":
+                self._models["compression"] = GOOGLE_COMPRESSION_MODELS
+            else:
+                self._models["generation"] = GOOGLE_AI_MODELS
+        return self._models[pool_name]
 
-    def get_current_model(self) -> str:
-        return self.models[self.current_index]
+    def get_current_model(self, pool_name: str = "generation") -> str:
+        pool = self._get_pool(pool_name)
+        idx = self._indices.get(pool_name, 0)
+        return pool[idx]
 
-    async def rotate(self) -> bool:
+    async def rotate(self, pool_name: str = "generation") -> bool:
         """
-        Rotates to the next model.
+        Rotates to the next model in the specified pool.
         Returns True if we have completed a full cycle and are back at the start.
         """
         async with self._get_lock():
-            self.current_index = (self.current_index + 1) % len(self.models)
-            is_full_cycle = self.current_index == 0
+            pool = self._get_pool(pool_name)
+            self._indices[pool_name] = (self._indices.get(pool_name, 0) + 1) % len(pool)
+            is_full_cycle = self._indices[pool_name] == 0
             logger.info(
-                f"Model rotated to: {self.get_current_model()} (Full cycle: {is_full_cycle})"
+                f"Model pool '{pool_name}' rotated to: {self.get_current_model(pool_name)} (Full cycle: {is_full_cycle})"
             )
             return is_full_cycle
 
@@ -73,12 +78,13 @@ def parse_retry_delay(error: Exception) -> float | None:
 
 
 def retry_on_ai_quota(
-    max_retries: int = 5, initial_backoff: float = 1.0, rotate_models: bool = True
+    max_retries: int = 5, initial_backoff: float = 1.0, rotate_models: bool = True, pool_name: str = "generation"
 ):
     """
     Decorator for retrying AI API calls on 429 RESOURCE_EXHAUSTED errors.
     Implements model fallback and exponential backoff.
     :param rotate_models: If True, switches models on 429. If False, just waits.
+    :param pool_name: The model pool to rotate within.
     """
 
     def decorator(func):
@@ -88,7 +94,8 @@ def retry_on_ai_quota(
 
             # total_attempts is the initial try plus max_retries,
             # multiplied by the number of models if rotation is enabled.
-            multiplier = len(model_manager.models) if rotate_models else 1
+            models = model_manager._get_pool(pool_name)
+            multiplier = len(models) if rotate_models else 1
             total_attempts = (max_retries + 1) * multiplier
 
             for attempt in range(total_attempts):
@@ -103,26 +110,26 @@ def retry_on_ai_quota(
                         wait_time = parse_retry_delay(e)
 
                         if rotate_models:
-                            is_full_cycle = await model_manager.rotate()
+                            is_full_cycle = await model_manager.rotate(pool_name)
                             if is_full_cycle:
-                                cycle_count = attempt // len(model_manager.models)
+                                cycle_count = attempt // len(models)
                                 wait_time = wait_time or (initial_backoff * (2**cycle_count))
                                 logger.warning(
-                                    f"All models exhausted (429). Cycle {cycle_count + 1} "
+                                    f"All models in pool '{pool_name}' exhausted (429). Cycle {cycle_count + 1} "
                                     f"complete. Waiting {wait_time:.2f}s before restarting..."
                                 )
                                 await asyncio.sleep(wait_time)
                             else:
                                 logger.info(
-                                    f"Model 429 detected. Falling back to "
-                                    f"{model_manager.get_current_model()}..."
+                                    f"Model 429 detected in pool '{pool_name}'. Falling back to "
+                                    f"{model_manager.get_current_model(pool_name)}..."
                                 )
                                 await asyncio.sleep(random.uniform(0.1, 0.3))
                         else:
                             # Just exponential backoff without rotation
                             wait_time = wait_time or (initial_backoff * (2**attempt))
                             logger.warning(
-                                f"Quota limit (429) reached. Attempt {attempt + 1}. "
+                                f"Quota limit (429) reached for pool '{pool_name}'. Attempt {attempt + 1}. "
                                 f"Waiting {wait_time:.2f}s..."
                             )
                             await asyncio.sleep(wait_time)

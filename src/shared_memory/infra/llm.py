@@ -72,12 +72,54 @@ class GeminiProvider(LlmProvider):
             # Fallback to character-based estimation (1 token ~ 4 chars)
             return len(contents) // 4
 
-    @retry_on_ai_quota(max_retries=3, rotate_models=True)
+    @retry_on_ai_quota(max_retries=3, rotate_models=True, pool_name="compression")
+    async def _compress_content(self, content: str, target_tokens: int) -> str:
+        """
+        Compresses/Distills the content using an LLM to fit within target_tokens.
+        Uses the 'compression' model pool.
+        """
+        client = self._get_client()
+        # In settings.py, generative_model returns model_manager.get_current_model() which defaults to 'generation' pool.
+        # We need to manually pick from the compression pool here.
+        from shared_memory.core.ai_control import model_manager
+        model = model_manager.get_current_model(pool_name="compression")
+        
+        logger.info(f"Triggering context compression using model: {model} (Target: {target_tokens} tokens)")
+        
+        system_instruction = (
+            "You are a high-precision data distillation engine. "
+            "Your goal is to compress the provided text by removing redundant modifiers, "
+            "connectives, and fillers, while preserving 100% of the core facts and logical relationships. "
+            f"Aim to reduce the token count to approximately {target_tokens} tokens. "
+            "Output ONLY the distilled facts, preferably as a dense list."
+        )
+        
+        full_prompt = f"DISTILL THE FOLLOWING KNOWLEDGE:\n\n{content}"
+        
+        try:
+            # We use the same throttle for compression to be safe
+            await AIRateLimiter.throttle(task_type="generation")
+            response = await client.aio.models.generate_content(
+                model=model, 
+                contents=full_prompt,
+                config={"system_instruction": system_instruction}
+            )
+            compressed_text = response.text
+            new_tokens = await self._count_tokens(model, compressed_text)
+            logger.info(f"Compression complete. Tokens reduced to {new_tokens}.")
+            return compressed_text
+        except Exception as e:
+            logger.error(f"Context compression failed: {e}")
+            # If compression fails, we return the original and let the main flow handle the error
+            return content
+
+    @retry_on_ai_quota(max_retries=3, rotate_models=True, pool_name="generation")
     async def generate_content(self, prompt: str, system_instruction: str = None) -> str:
         client = self._get_client()
         if not client:
             raise ValueError("Gemini API key not found.")
 
+        # Main generation model
         model = settings.generative_model
         metadata = await self._get_model_metadata(model)
         
@@ -90,19 +132,30 @@ class GeminiProvider(LlmProvider):
         token_count = await self._count_tokens(model, full_prompt)
         limit = metadata["input_token_limit"]
         
+        # Threshold for compression (90% of limit)
+        safe_threshold = int(limit * 0.9)
+        
+        if token_count > safe_threshold:
+            logger.warning(
+                f"Token count ({token_count}) exceeds safe threshold ({safe_threshold}). "
+                "Initiating autonomous compression..."
+            )
+            # We compress the USER prompt part primarily, as system instructions are usually static
+            compressed_prompt = await self._compress_content(prompt, safe_threshold // 2)
+            
+            # Re-construct full prompt
+            if system_instruction:
+                full_prompt = f"SYSTEM: {system_instruction}\n\nUSER: {compressed_prompt}"
+            else:
+                full_prompt = compressed_prompt
+                
+            # Final check
+            token_count = await self._count_tokens(model, full_prompt)
+            logger.info(f"Post-compression token count: {token_count}")
+
         logger.info(
             f"Gemini API Request - Model: {model}, Tokens: {token_count}/{limit}"
         )
-
-        if token_count > limit * 0.9:
-            logger.warning(
-                f"Token count ({token_count}) is approaching or exceeding limit ({limit}). "
-                "Truncation or chunking may be required."
-            )
-            # Future Improvement: Implement dynamic chunking/truncation here
-            # For now, we proceed but log the risk.
-            if token_count > limit:
-                logger.error("Token count strictly exceeds model limit. This call will likely fail.")
 
         await AIRateLimiter.throttle(task_type="generation")
 
