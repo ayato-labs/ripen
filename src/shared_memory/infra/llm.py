@@ -55,6 +55,13 @@ class GeminiProvider(LlmProvider):
             full_prompt = f"SYSTEM: {system_instruction}\n\nUSER: {prompt}"
 
         model = settings.generative_model
+        logger.debug(
+            f"Gemini API Request - Model: {model}, Prompt Length: {len(full_prompt)} chars"
+        )
+        # Log a preview of the prompt for debugging 500 errors
+        prompt_preview = full_prompt[:500] + ("..." if len(full_prompt) > 500 else "")
+        logger.debug(f"Prompt Preview: {prompt_preview}")
+
         try:
             response = await client.aio.models.generate_content(model=model, contents=full_prompt)
             logger.info(f"Gemini response received. Model: {model}")
