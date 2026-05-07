@@ -29,15 +29,30 @@ async def test_save_memory_harsh_invalid_inputs():
 @pytest.mark.asyncio
 async def test_save_memory_harsh_ai_repeated_errors():
     """
-    Test how it handles persistent AI errors.
+    Test how it handles persistent AI errors. 
+    Expectation: The system remains resilient and persists the raw data 
+    even if vector embedding fails (falls back to keyword-only search).
     """
     fake_client = FakeGeminiClient()
     fake_client.models.set_error("embed_content", Exception("Rate Limit Exceeded"))
     
     with patch("shared_memory.infra.embeddings.get_gemini_client", return_value=fake_client):
-        # This should eventually return an AI error message after retries
-        res = await logic.save_memory_core(entities=["AlwaysFail"])
-        assert "AI Error" in res
+        # We also need to patch compute_embeddings_bulk if it's used directly
+        # actually save_memory_core uses logic_module.compute_embedding which uses 
+        # embeddings.compute_embedding which uses get_gemini_client().
+        
+        # 実行
+        res = await logic.save_memory_core(
+            entities=[{"name": "ResilientNode", "description": "AI fails but I live"}]
+        )
+        # Should report success because data was saved to DB
+        assert "Saved 1 entities" in res
+        
+        # 裏取り: 本当にDBに保存されているか
+        from shared_memory.infra.database import async_get_connection
+        async with await async_get_connection() as conn:
+            cursor = await conn.execute("SELECT name FROM entities WHERE name='ResilientNode'")
+            assert (await cursor.fetchone()) is not None
 
 @pytest.mark.asyncio
 async def test_save_memory_harsh_data_corruption_simulation():

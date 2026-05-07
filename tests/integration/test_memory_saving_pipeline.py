@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
 import pytest
+import os
 
 from shared_memory.core import logic
 
@@ -57,27 +58,35 @@ async def test_memory_saving_pipeline_ai_rotation_true_integration():
     Truer integration test: Mock client to fail, let decorator handle retry.
     """
     entities = [{"name": "A", "description": "desc"}]
-    
-    with patch("shared_memory.infra.embeddings.get_gemini_client") as mock_client_factory:
-        mock_client = MagicMock()
-        mock_client.aio.models.embed_content = AsyncMock()
-        mock_client.aio.models.embed_content.side_effect = [
-            Exception("429 RESOURCE_EXHAUSTED"),
-            MagicMock(embeddings=[MagicMock(values=[0.1]*768)])
-        ]
-        mock_client_factory.return_value = mock_client
-        
-        with patch("shared_memory.infra.database.async_get_connection") as mock_conn_factory:
-             mock_conn = MagicMock()
-             mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
-             mock_conn.__aexit__ = AsyncMock()
-             mock_conn_factory.return_value = mock_conn
-             
-             with patch("shared_memory.core.graph.save_entities", return_value="Saved 1 entities"):
-                 with patch("shared_memory.core.ai_control.asyncio.sleep", return_value=None):
-                     result = await logic.save_memory_core(entities=entities)
-                     assert "Saved 1 entities" in result
-                     assert mock_client.aio.models.embed_content.call_count == 2
+
+    # Force Gemini engine to ensure it uses the mock client
+    with patch.dict("os.environ", {"EMBEDDING_ENGINE": "gemini", "EMBEDDING_MODEL": "models/text-embedding-004"}):
+        with patch("shared_memory.infra.embeddings.get_gemini_client") as mock_client_factory:
+            mock_client = MagicMock()
+            mock_client.aio.models.embed_content = AsyncMock()
+            
+            mock_embedding_resp = MagicMock()
+            mock_emb_val = MagicMock()
+            mock_emb_val.values = [0.1]*768
+            mock_embedding_resp.embeddings = [mock_emb_val]
+
+            mock_client.aio.models.embed_content.side_effect = [
+                Exception("429 RESOURCE_EXHAUSTED"),
+                mock_embedding_resp
+            ]
+            mock_client_factory.return_value = mock_client
+            
+            with patch("shared_memory.infra.database.async_get_connection") as mock_conn_factory:
+                 mock_conn = MagicMock()
+                 mock_conn.__aenter__ = AsyncMock(return_value=mock_conn)
+                 mock_conn.__aexit__ = AsyncMock()
+                 mock_conn_factory.return_value = mock_conn
+                 
+                 with patch("shared_memory.core.graph.save_entities", return_value="Saved 1 entities"):
+                     with patch("shared_memory.core.ai_control.asyncio.sleep", return_value=None):
+                         result = await logic.save_memory_core(entities=entities)
+                         assert "Saved 1 entities" in result
+                         assert mock_client.aio.models.embed_content.call_count == 2
 
 @pytest.mark.asyncio
 async def test_memory_saving_pipeline_partial_failure():
@@ -86,6 +95,7 @@ async def test_memory_saving_pipeline_partial_failure():
     """
     entities = [{"name": "FailEntity", "description": "Fail"}]
     
+    # SaveMemoryCore now calls compute_embeddings_bulk which calls compute_embedding.
     with patch("shared_memory.core.logic.compute_embeddings_bulk") as mock_emb:
         mock_emb.side_effect = Exception("Embedding Service Unavailable")
         

@@ -22,7 +22,10 @@ def configure_logging():
     - Isolates errors to logs/error.log.
     """
     global _LOGGING_CONFIGURED
-    if _LOGGING_CONFIGURED and "PYTEST_CURRENT_TEST" in os.environ:
+    
+    # In Windows environment, multiple attempts to add file sinks can cause WinError 32
+    # if the file is already open by the same process.
+    if _LOGGING_CONFIGURED:
         return
 
     logger.remove()
