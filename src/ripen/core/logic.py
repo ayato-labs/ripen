@@ -14,6 +14,7 @@ from ripen.infra.database import (
     retry_on_db_lock,
 )
 from ripen.infra.embeddings import compute_embeddings_bulk
+from ripen.infra.repository import TroubleshootingRepository
 from ripen.ops import health, lifecycle, management
 from ripen.ops.insights import InsightEngine
 
@@ -516,12 +517,8 @@ async def save_troubleshooting_knowledge_core(
                 )
                 env = json.dumps(env_metadata or {})
 
-                await conn.execute(
-                    """
-                    INSERT INTO troubleshooting_knowledge (title, solution, affected_functions, env_metadata)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (title, solution, affected, env),
+                await TroubleshootingRepository.insert_troubleshooting(
+                    conn, title, solution, affected, env
                 )
                 await conn.commit()
                 local_logger.info("Troubleshooting knowledge saved successfully")

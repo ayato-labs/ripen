@@ -73,3 +73,50 @@ class EmbeddingRepository:
             "INSERT OR REPLACE INTO embeddings (content_id, vector, model_name) VALUES (?, ?, ?)",
             (content_id, json.dumps(vector).encode("utf-8"), model_name),
         )
+
+class TroubleshootingRepository:
+    """Repository for managing troubleshooting knowledge."""
+    
+    @staticmethod
+    async def insert_troubleshooting(conn, title: str, solution: str, affected_functions: str, env_metadata: str):
+        await conn.execute(
+            """
+            INSERT INTO troubleshooting_knowledge (title, solution, affected_functions, env_metadata)
+            VALUES (?, ?, ?, ?)
+            """,
+            (title, solution, affected_functions, env_metadata),
+        )
+
+class TagRepository:
+    """Repository for managing tags."""
+    
+    @staticmethod
+    async def replace_tags(conn, content_id: str, content_type: str, tags: list[str]):
+        await conn.execute(
+            "DELETE FROM tags WHERE content_id = ? AND content_type = ?", (content_id, content_type)
+        )
+        data = [(t, content_id, content_type) for t in tags]
+        await conn.executemany(
+            "INSERT OR IGNORE INTO tags (tag, content_id, content_type) VALUES (?, ?, ?)", data
+        )
+
+class ObservationRepository:
+    """Repository for managing observations."""
+    
+    @staticmethod
+    async def get_recent_observations(conn, entity_name: str, limit: int = 5) -> list[str]:
+        cursor = await conn.execute(
+            "SELECT content FROM observations WHERE entity_name = ? ORDER BY timestamp DESC LIMIT ?",
+            (entity_name, limit)
+        )
+        return [row[0] for row in await cursor.fetchall()]
+
+class ConflictRepository:
+    """Repository for managing conflicts."""
+    
+    @staticmethod
+    async def insert_conflict(conn, entity_name: str, existing_content: str, new_content: str, reason: str, agent_id: str):
+        await conn.execute(
+            "INSERT INTO conflicts (entity_name, existing_content, new_content, reason, agent_id) VALUES (?, ?, ?, ?, ?)",
+            (entity_name, existing_content, new_content, reason, agent_id),
+        )

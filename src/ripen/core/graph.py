@@ -13,6 +13,11 @@ from ripen.common.utils import (
 from ripen.infra.database import async_get_connection
 from ripen.infra.embeddings import compute_embeddings_bulk
 from ripen.infra.llm import get_llm_provider
+from ripen.infra.repository import (
+    ConflictRepository,
+    ObservationRepository,
+    TagRepository,
+)
 
 logger = get_logger("graph")
 
@@ -183,15 +188,7 @@ async def save_tags(content_id: str, content_type: str, tags: list[str], conn):
         return
 
     try:
-        # 1. Delete old tags
-        await conn.execute(
-            "DELETE FROM tags WHERE content_id = ? AND content_type = ?", (content_id, content_type)
-        )
-        # 2. Insert new tags
-        data = [(t, content_id, content_type) for t in tags]
-        await conn.executemany(
-            "INSERT OR IGNORE INTO tags (tag, content_id, content_type) VALUES (?, ?, ?)", data
-        )
+        await TagRepository.replace_tags(conn, content_id, content_type, tags)
     except Exception as e:
         logger.error(f"Failed to save tags for {content_id}: {e}")
 
@@ -220,16 +217,12 @@ async def check_conflict(entity_name: str, new_contents: list[str], agent_id: st
 
 async def _check_conflicts_internal(entity_name: str, new_contents: list[str], agent_id: str, conn):
     # Fetch up to 5 most recent observations for richer context
-    cursor = await conn.execute(
-        "SELECT content FROM observations WHERE entity_name = ? ORDER BY timestamp DESC LIMIT 5",
-        (entity_name,),
-    )
-    existing = await cursor.fetchall()
+    existing = await ObservationRepository.get_recent_observations(conn, entity_name, limit=5)
 
     if not existing:
         return [(False, None)] * len(new_contents)
 
-    existing_text = "\n".join([f"- {row[0]}" for row in existing])
+    existing_text = "\n".join([f"- {row}" for row in existing])
     new_text_numbered = "\n".join([f"{i}. {content}" for i, content in enumerate(new_contents)])
 
     prompt = (
@@ -270,11 +263,8 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
 
             if is_conflict:
                 logger.warning(f"CONFLICT DETECTED in '{entity_name}': {reason}")
-                await conn.execute(
-                    "INSERT INTO conflicts "
-                    "(entity_name, existing_content, new_content, reason, agent_id) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (entity_name, existing_text, new_contents[i], reason, agent_id),
+                await ConflictRepository.insert_conflict(
+                    conn, entity_name, existing_text, new_contents[i], reason, agent_id
                 )
         await conn.commit()
         return final_results
@@ -283,11 +273,8 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
         # Record failure as a conflict so a human can decide
         reason = f"Conflict check failed (AI error): {e}"
         for content in new_contents:
-            await conn.execute(
-                "INSERT INTO conflicts "
-                "(entity_name, existing_content, new_content, reason, agent_id) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (entity_name, existing_text, content, reason, agent_id),
+            await ConflictRepository.insert_conflict(
+                conn, entity_name, existing_text, content, reason, agent_id
             )
         await conn.commit()
         return [(True, reason)] * len(new_contents)
