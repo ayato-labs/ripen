@@ -12,6 +12,7 @@ from starlette.applications import Starlette
 
 from ripen.api.auth import AuthMiddleware, get_current_user
 from ripen.common.config import settings
+from ripen.common.plugins import PluginLoader
 from ripen.common.tasks import create_background_task
 from ripen.common.utils import configure_logging, get_logger
 from ripen.ops.lifecycle import start_database_maintenance
@@ -355,6 +356,11 @@ def main():
     parser.add_argument("--sse", action="store_true")
     parser.add_argument("--port", type=int, default=8377)
     args = parser.parse_args()
+
+    # --- Plugin Loading ---
+    logger.info("Discovering plugins...")
+    context = {"settings": settings}
+    settings._plugins = PluginLoader.load_all(context)
 
     if args.sse:
         _kill_port_process(args.port)

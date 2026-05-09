@@ -35,6 +35,7 @@ class Settings:
     _base_dir: Path | None = None
     _api_key: str | None = None
     _config_data: dict = {}
+    _plugins: list = []
 
     def __new__(cls):
         if cls._instance is None:
@@ -189,6 +190,16 @@ class Settings:
     def hashtag_ai_threshold(self) -> int:
         """ハッシュタグ抽出においてAIを使用するかロジックを使用するかの文字数閾値。"""
         return int(self.get("HASHTAG_AI_THRESHOLD", "100"))
+
+    @property
+    def plugins(self) -> list:
+        """ロードされたプラグインのリストを返す。"""
+        return self._plugins
+
+    @property
+    def is_enterprise(self) -> bool:
+        """商用版プラグインが有効かどうかを返す。"""
+        return any(getattr(p, "is_enterprise", False) for p in self._plugins)
 
 
 # Singleton instance
