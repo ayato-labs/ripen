@@ -38,30 +38,31 @@ async def perform_keyword_search(
         scored_results = {}
 
         # 1. Search Knowledge DB using FTS5 (Entities, Observations, Bank, Troubleshooting)
-        # (Source, Table, ID_Col, Content_Col, Maturity, Boost)
+        # (Source, Table, ID_Col, Content_Col, Maturity, Boost, Title_Col)
         fts_sources = [
-            ("troubleshooting_knowledge", "troubleshooting_knowledge_fts", "id", "solution", "STABLE", 2.5),
-            ("entities", "entities_fts", "name", "description", "STABLE", 1.5),
-            ("observations", "observations_fts", "entity_name", "content", "STABLE", 1.2),
-            ("bank_files", "bank_files_fts", "filename", "content", "OBSERVED", 1.0),
+            ("troubleshooting_knowledge", "troubleshooting_knowledge_fts", "id", "solution", "STABLE", 2.5, "title"),
+            ("entities", "entities_fts", "name", "description", "STABLE", 1.5, "name"),
+            ("observations", "observations_fts", "entity_name", "content", "STABLE", 1.2, "entity_name"),
+            ("bank_files", "bank_files_fts", "filename", "content", "OBSERVED", 1.0, "filename"),
         ]
 
         # Escape query for FTS5 syntax
         fts_query = escape_fts5_query(query)
 
-        for source_name, fts_table, id_col, content_col, maturity, boost in fts_sources:
+        for source_name, fts_table, id_col, content_col, maturity, boost, title_col in fts_sources:
             try:
                 if not fts_query:
                     raise ValueError("Empty FTS query")
 
                 cursor = await conn.execute(
-                    f"SELECT {id_col}, {content_col}, bm25({fts_table}) "
+                    f"SELECT {id_col}, {content_col}, {title_col}, bm25({fts_table}) "
                     f"FROM {fts_table} WHERE {fts_table} MATCH ?",
                     (fts_query,),
                 )
-                for row_id, content, rank in await cursor.fetchall():
+                for row_id, content, title, rank in await cursor.fetchall():
                     score = max(0.1, abs(rank) * boost)
-                    if query.lower() in str(row_id).lower():
+                    # Check both ID (name/filename) and Title for bonus
+                    if query.lower() in str(row_id).lower() or query.lower() in str(title).lower():
                         score += 15.0
 
                     key = (source_name, row_id)
@@ -70,7 +71,7 @@ async def perform_keyword_search(
             except Exception:
                 # Fallback to LIKE search
                 cursor = await conn.execute(
-                    f"SELECT {id_col}, {content_col} FROM {source_name if 'fts' not in fts_table else source_name} "
+                    f"SELECT {id_col}, {content_col} FROM {source_name} "
                     f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?) AND (status = 'active' OR 1=1)",
                     (f"%{query}%", f"%{query}%"),
                 )
@@ -87,7 +88,12 @@ async def perform_keyword_search(
         )
         for cid, ctype, tag in await cursor.fetchall():
             score = 15.0
-            key = (ctype + "s" if not ctype.endswith("s") else ctype, cid)
+            # Fix pluralization
+            source_label = ctype + "s" if not ctype.endswith("s") else ctype
+            if source_label == "entitys":
+                source_label = "entities"
+            
+            key = (source_label, cid)
             maturity = "STABLE" if ctype in ["entity", "observation", "troubleshooting"] else "OBSERVED"
             current_score, content, _ = scored_results.get(key, (0.0, f"Matched tag: {tag}", maturity))
             scored_results[key] = (current_score + score, content, maturity)
@@ -185,9 +191,9 @@ async def perform_search(
                 maturity = k_res["maturity"] if k_res else "STABLE"
                 maturity_boost = 1.0
                 if maturity == "STABLE":
-                    maturity_boost = 1.2
+                    maturity_boost = 1.5
                 elif maturity == "TRANSIENT":
-                    maturity_boost = 0.5
+                    maturity_boost = 0.3
                 
                 final_score = ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
                 results.append((cid, final_score))
@@ -198,7 +204,7 @@ async def perform_search(
                 if cid not in seen_cids:
                     k_score = res["score"]
                     maturity = res["maturity"]
-                    maturity_boost = 1.2 if maturity == "STABLE" else (0.5 if maturity == "TRANSIENT" else 1.0)
+                    maturity_boost = 1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
                     
                     count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
                     importance = calculate_importance(count, last)

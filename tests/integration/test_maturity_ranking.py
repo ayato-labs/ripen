@@ -45,22 +45,18 @@ async def test_maturity_ranking_logic():
     
     # --- VERIFICATION 1: Keyword Search Order ---
     results = await perform_keyword_search(keyword, limit=10)
-    sources = [r["source"] for r in results]
+    sources = [(r["source"], r["score"], r["maturity"]) for r in results]
     
-    # troubleshooting should be high due to 2.5 boost
-    # entities should be next (1.5 boost)
-    # bank_files next (1.0 boost)
-    # thought_history lowest (0.3 boost)
-    
-    print(f"\nKeyword search results: {sources}")
-    assert "troubleshooting" in sources
-    assert "entities" in sources
-    assert "bank_files" in sources
-    assert "thought_history" in sources
+    print(f"\nKeyword search results with scores: {sources}")
+    source_names = [s[0] for s in sources]
+    assert "troubleshooting_knowledge" in source_names
+    assert "entities" in source_names
+    assert "bank_files" in source_names
+    assert "thought_history" in source_names
     
     # Verify order (roughly)
-    ts_idx = sources.index("troubleshooting")
-    th_idx = sources.index("thought_history")
+    ts_idx = source_names.index("troubleshooting_knowledge")
+    th_idx = source_names.index("thought_history")
     assert ts_idx < th_idx, "Troubleshooting should be ranked higher than Thought History"
 
     # --- VERIFICATION 2: Hybrid Search Maturity Boosting ---
