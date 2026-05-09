@@ -151,7 +151,11 @@ async def lifespan(app: FastMCP):
 # --- Server Setup ---
 mcp = FastMCP(
     "SharedMemoryServer",
-    instructions="A production-grade long-term memory server for AI agents. Provides semantic search, graph-based knowledge retrieval, and persistent reasoning provenance.",
+    instructions=(
+        "A production-grade long-term memory server for AI agents. "
+        "Provides semantic search, graph-based knowledge retrieval, "
+        "and persistent reasoning provenance."
+    ),
     lifespan=lifespan,
 )
 
@@ -159,7 +163,12 @@ mcp = FastMCP(
 
 
 @mcp.tool(
-    description="The gateway to your long-term memory. Use this to persist high-signal information, verified architectural decisions, and stable domain knowledge. Focus on structured 'entities' and 'relations' to build a permanent 'Single Source of Truth'."
+    description=(
+        "The gateway to your long-term memory. Use this to persist high-signal information, "
+        "verified architectural decisions, and stable domain knowledge. "
+        "Focus on structured 'entities' and 'relations' to build a "
+        "permanent 'Single Source of Truth'."
+    )
 )
 async def save_memory(
     entities: list[dict] | None = None,
@@ -175,7 +184,11 @@ async def save_memory(
 
 
 @mcp.tool(
-    description="A hybrid semantic/full-text search interface to your external hippocampus. Use this at the beginning of any task to 'salvage' relevant past context and avoid reinventing the wheel."
+    description=(
+        "A hybrid semantic/full-text search interface to your external hippocampus. "
+        "Use this at the beginning of any task to 'salvage' relevant past context "
+        "and avoid reinventing the wheel."
+    )
 )
 async def read_memory(query: str | None = None) -> str:
     """A hybrid semantic/full-text search interface to your external hippocampus."""
@@ -185,7 +198,10 @@ async def read_memory(query: str | None = None) -> str:
 
 
 @mcp.tool(
-    description="Synthesize all available knowledge about a specific entity into a comprehensive summary. Use this when 'read_memory' provides an ID or name you need to investigate in depth."
+    description=(
+        "Synthesize all available knowledge about a specific entity into a comprehensive summary. "
+        "Use this when 'read_memory' provides an ID or name you need to investigate in depth."
+    )
 )
 async def synthesize_entity(entity_name: str) -> str:
     """Synthesize all available knowledge about a specific entity."""
@@ -195,7 +211,11 @@ async def synthesize_entity(entity_name: str) -> str:
 
 
 @mcp.tool(
-    description="Retrieve the structural relationships (graph) of knowledge. Use this to understand dependencies, hierarchical connections, and how different entities relate to each other."
+    description=(
+        "Retrieve the structural relationships (graph) of knowledge. "
+        "Use this to understand dependencies, hierarchical connections, "
+        "and how different entities relate to each other."
+    )
 )
 async def get_graph_data(query: str | None = None) -> str:
     """Retrieve the structural relationships (graph) of knowledge."""
@@ -205,7 +225,10 @@ async def get_graph_data(query: str | None = None) -> str:
 
 
 @mcp.tool(
-    description="An advanced reasoning tool to externalize and govern your inference process. Use this as your primary cognitive workspace to break down complex problems."
+    description=(
+        "An advanced reasoning tool to externalize and govern your inference process. "
+        "Use this as your primary cognitive workspace to break down complex problems."
+    )
 )
 async def sequential_thinking(
     thought: str,
@@ -237,7 +260,10 @@ async def sequential_thinking(
 
 
 @mcp.tool(
-    description="Govern the 'Maturity' and 'Activation' of knowledge. Use this to manually activate important patterns or archive transient noise."
+    description=(
+        "Govern the 'Maturity' and 'Activation' of knowledge. "
+        "Use this to manually activate important patterns or archive transient noise."
+    )
 )
 async def manage_knowledge_activation(ids: Any, status: str) -> str:
     """Govern the 'Maturity' and 'Activation' of knowledge."""
@@ -247,7 +273,10 @@ async def manage_knowledge_activation(ids: Any, status: str) -> str:
 
 
 @mcp.tool(
-    description="List archived or low-maturity knowledge. Use this to review what has been filtered out and identify if any critical information needs to be 're-activated'."
+    description=(
+        "List archived or low-maturity knowledge. Use this to review what has been "
+        "filtered out and identify if any critical information needs to be 're-activated'."
+    )
 )
 async def list_inactive_knowledge() -> str:
     """List archived or low-maturity knowledge."""
@@ -266,7 +295,10 @@ async def get_insights(format: str = "markdown") -> str:
 
 
 @mcp.tool(
-    description="System maintenance: Garbage collection. Trigger this to purge ancient, unused knowledge and maintain system performance."
+    description=(
+        "System maintenance: Garbage collection. Trigger this to purge ancient, "
+        "unused knowledge and maintain system performance."
+    )
 )
 async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False) -> str:
     """System maintenance: Garbage collection."""
