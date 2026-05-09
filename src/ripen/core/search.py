@@ -20,6 +20,17 @@ from ripen.infra.database import (
 )
 from ripen.infra.embeddings import compute_embedding
 from ripen.infra.llm import get_llm_provider
+from ripen.infra.repository import (
+    BankRepository,
+    EntityRepository,
+    MetadataRepository,
+    ObservationRepository,
+    RelationRepository,
+    SearchRepository,
+    TagRepository,
+    ThoughtRepository,
+    TroubleshootingRepository,
+)
 
 logger = get_logger("search")
 
@@ -54,12 +65,10 @@ async def perform_keyword_search(
                 if not fts_query:
                     raise ValueError("Empty FTS query")
 
-                cursor = await conn.execute(
-                    f"SELECT {id_col}, {content_col}, {title_col}, bm25({fts_table}) "
-                    f"FROM {fts_table} WHERE {fts_table} MATCH ?",
-                    (fts_query,),
+                rows = await SearchRepository.perform_fts_search(
+                    conn, fts_table, id_col, content_col, title_col, fts_query
                 )
-                for row_id, content, title, rank in await cursor.fetchall():
+                for row_id, content, title, rank in rows:
                     score = max(0.1, abs(rank) * boost)
                     # Check both ID (name/filename) and Title for bonus
                     if query.lower() in str(row_id).lower() or query.lower() in str(title).lower():
@@ -70,32 +79,30 @@ async def perform_keyword_search(
                     scored_results[key] = (current_score + score, str(content), maturity)
             except Exception:
                 # Fallback to LIKE search
-                cursor = await conn.execute(
-                    f"SELECT {id_col}, {content_col} FROM {source_name} "
-                    f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?) AND (status = 'active' OR 1=1)",
-                    (f"%{query}%", f"%{query}%"),
+                rows = await SearchRepository.perform_like_search(
+                    conn, source_name, id_col, content_col, query
                 )
-                for row_id, content in await cursor.fetchall():
+                for row_id, content in rows:
                     key = (source_name, row_id)
                     current_score, _, _ = scored_results.get(key, (0.0, "", ""))
                     scored_results[key] = (current_score + (2.0 * boost), str(content), maturity)
 
         # 1.1 Search Tags
-        placeholders = ",".join(["?"] * len(query_words))
-        cursor = await conn.execute(
-            f"SELECT content_id, content_type, tag FROM tags WHERE tag IN ({placeholders})",
-            [f"#{w}" for w in query_words],
-        )
-        for cid, ctype, tag in await cursor.fetchall():
+        rows = await TagRepository.search_tags(conn, query_words)
+        for cid, ctype, tag in rows:
             score = 15.0
             # Fix pluralization
             source_label = ctype + "s" if not ctype.endswith("s") else ctype
             if source_label == "entitys":
                 source_label = "entities"
-            
+
             key = (source_label, cid)
-            maturity = "STABLE" if ctype in ["entity", "observation", "troubleshooting"] else "OBSERVED"
-            current_score, content, _ = scored_results.get(key, (0.0, f"Matched tag: {tag}", maturity))
+            maturity = (
+                "STABLE" if ctype in ["entity", "observation", "troubleshooting"] else "OBSERVED"
+            )
+            current_score, content, _ = scored_results.get(
+                key, (0.0, f"Matched tag: {tag}", maturity)
+            )
             scored_results[key] = (current_score + score, content, maturity)
 
         # 2. Search Thoughts DB (Transient)
@@ -105,13 +112,10 @@ async def perform_keyword_search(
                     raise ValueError("Empty FTS query")
 
                 async with await async_get_thoughts_connection() as t_conn:
-                    t_cursor = await t_conn.execute(
-                        "SELECT session_id, thought_number, thought, bm25(thought_history_fts) "
-                        "FROM thought_history_fts WHERE thought_history_fts MATCH ? "
-                        "AND session_id != ?",
-                        (fts_query, exclude_session_id or ""),
+                    rows = await ThoughtRepository.search_thoughts(
+                        t_conn, fts_query, exclude_session_id or ""
                     )
-                    for sess_id, t_num, thought, rank in await t_cursor.fetchall():
+                    for sess_id, t_num, thought, rank in rows:
                         score = max(0.1, abs(rank) * 0.3)
                         key = ("thought_history", f"{sess_id}#{t_num}")
                         current_score, _, _ = scored_results.get(key, (0.0, "", ""))
@@ -151,14 +155,7 @@ async def perform_search(
 
     try:
         async with await async_get_connection() as conn:
-            cursor = await conn.execute("""
-                SELECT e.content_id, e.vector
-                FROM embeddings e
-                LEFT JOIN entities ent ON e.content_id = ent.name
-                LEFT JOIN bank_files bf ON e.content_id = bf.filename
-                WHERE (ent.status = 'active' OR bf.status = 'active')
-            """)
-            all_rows = await cursor.fetchall()
+            all_rows = await SearchRepository.get_all_embeddings(conn)
 
             query_vector = await task_vector
             keyword_results = await task_keyword
@@ -170,11 +167,8 @@ async def perform_search(
             all_vectors = [json.loads(r[1]) for r in all_rows]
             similarities = batch_cosine_similarity(query_vector, all_vectors)
 
-            cursor = await conn.execute(
-                "SELECT content_id, access_count, last_accessed FROM knowledge_metadata"
-            )
-            metadata = await cursor.fetchall()
-            meta_map = {m[0]: (m[1], m[2]) for m in metadata}
+            metadata_rows = await MetadataRepository.get_all_metadata(conn)
+            meta_map = {m[0]: (m[1], m[2]) for m in metadata_rows}
             {r["id"]: r["score"] for r in keyword_results}
 
             results = []
@@ -236,43 +230,19 @@ async def perform_search(
 async def get_graph_data_by_cids(cids: list[str], conn):
     if not cids:
         return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}
-    
-    placeholders = ",".join(["?"] * len(cids))
-    
+
     # 1. Fetch Entities
-    cursor = await conn.execute(
-        f"SELECT * FROM entities WHERE name IN ({placeholders}) AND status = 'active'", cids
-    )
-    entities = await cursor.fetchall()
-    
+    entities = await EntityRepository.get_entities_by_names(conn, cids)
+
     # 2. Fetch Observations
-    cursor = await conn.execute(
-        f"SELECT * FROM observations WHERE entity_name IN ({placeholders}) AND status = 'active'",
-        cids,
-    )
-    obs = await cursor.fetchall()
+    obs = await ObservationRepository.get_observations_by_entity_names(conn, cids)
 
     # 3. Fetch Troubleshooting
-    # Filter CIDs that look like integers
-    ts_ids = [c for c in cids if str(c).isdigit()]
-    ts_rows = []
-    if ts_ids:
-        ts_placeholders = ",".join(["?"] * len(ts_ids))
-        cursor = await conn.execute(
-            f"SELECT * FROM troubleshooting_knowledge WHERE id IN ({ts_placeholders})", ts_ids
-        )
-        ts_rows = await cursor.fetchall()
+    ts_ids = [int(c) for c in cids if str(c).isdigit()]
+    ts_rows = await TroubleshootingRepository.get_troubleshooting_by_ids(conn, ts_ids)
 
     matched_names = [e["name"] for e in entities]
-    relations = []
-    if matched_names:
-        p2 = ",".join(["?"] * len(matched_names))
-        cursor = await conn.execute(
-            f"SELECT * FROM relations WHERE (subject IN ({p2}) OR object IN ({p2})) "
-            "AND status = 'active'",
-            matched_names + matched_names,
-        )
-        relations = await cursor.fetchall()
+    relations = await RelationRepository.get_relations_by_subjects_or_objects(conn, matched_names)
 
     return {
         "entities": [dict(e) for e in entities],
@@ -287,13 +257,7 @@ async def get_graph_data_by_cids(cids: list[str], conn):
 async def get_bank_data_by_cids(cids: list[str], conn):
     if not cids:
         return {}
-    placeholders = ",".join(["?"] * len(cids))
-    cursor = await conn.execute(
-        f"SELECT filename, content FROM bank_files WHERE filename IN ({placeholders}) "
-        "AND status = 'active'",
-        cids,
-    )
-    files = await cursor.fetchall()
+    files = await BankRepository.get_bank_files_by_names(conn, cids)
     return {f["filename"]: f["content"] for f in files}
 
 
@@ -313,22 +277,12 @@ async def synthesize_knowledge(entity_name: str):
     """Legacy synthesis function refactored to use LlmProvider."""
     async with await async_get_connection() as conn:
         try:
-            cursor = await conn.execute("SELECT * FROM entities WHERE name = ?", (entity_name,))
-            entity = await cursor.fetchone()
+            entity = await EntityRepository.get_entity_details(conn, entity_name)
             if not entity:
                 return f"Error: Entity '{entity_name}' not found."
 
-            cursor = await conn.execute(
-                "SELECT content, timestamp FROM observations WHERE entity_name = ? "
-                "AND status='active'",
-                (entity_name,),
-            )
-            obs = await cursor.fetchall()
-            cursor = await conn.execute(
-                "SELECT * FROM relations WHERE (subject = ? OR object = ?) AND status='active'",
-                (entity_name, entity_name),
-            )
-            rels = await cursor.fetchall()
+            obs = await ObservationRepository.get_active_observations_by_entity(conn, entity_name)
+            rels = await RelationRepository.get_relations_by_entity(conn, entity_name)
 
             provider = get_llm_provider()
             prompt = (
