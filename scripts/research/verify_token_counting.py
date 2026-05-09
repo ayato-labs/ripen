@@ -1,6 +1,5 @@
-import os
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 # Add src to sys.path
@@ -9,6 +8,7 @@ if src_path not in sys.path:
     sys.path.append(src_path)
 
 from google import genai
+
 from shared_memory.common.config import settings
 
 async def verify_token_counting():

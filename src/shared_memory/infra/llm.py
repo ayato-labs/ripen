@@ -50,7 +50,9 @@ class GeminiProvider(LlmProvider):
                     "input_token_limit": meta.input_token_limit,
                     "output_token_limit": meta.output_token_limit,
                 }
-                logger.debug(f"Model metadata cached for {model_name}: {self._model_metadata[model_name]}")
+                logger.debug(
+                    f"Model metadata cached for {model_name}: {self._model_metadata[model_name]}"
+                )
             except Exception as e:
                 logger.warning(f"Failed to fetch metadata for {model_name}: {e}")
                 # Fallback to conservative defaults if metadata fetch fails
@@ -79,17 +81,22 @@ class GeminiProvider(LlmProvider):
         Uses the 'compression' model pool.
         """
         client = self._get_client()
-        # In settings.py, generative_model returns model_manager.get_current_model() which defaults to 'generation' pool.
-        # We need to manually pick from the compression pool here.
+        # In settings.py, generative_model returns model_manager.get_current_model() 
+        # which defaults to 'generation' pool. We need to manually pick from 
+        # the compression pool here.
         from shared_memory.core.ai_control import model_manager
         model = model_manager.get_current_model(pool_name="compression")
         
-        logger.info(f"Triggering context compression using model: {model} (Target: {target_tokens} tokens)")
+        logger.info(
+            f"Triggering context compression using model: {model} "
+            f"(Target: {target_tokens} tokens)"
+        )
         
         system_instruction = (
             "You are a high-precision data distillation engine. "
             "Your goal is to compress the provided text by removing redundant modifiers, "
-            "connectives, and fillers, while preserving 100% of the core facts and logical relationships. "
+            "connectives, and fillers, while preserving 100% of the core facts "
+            "and logical relationships. "
             f"Aim to reduce the token count to approximately {target_tokens} tokens. "
             "Output ONLY the distilled facts, preferably as a dense list."
         )
@@ -100,7 +107,7 @@ class GeminiProvider(LlmProvider):
             # We use the same throttle for compression to be safe
             await AIRateLimiter.throttle(task_type="generation")
             response = await client.aio.models.generate_content(
-                model=model, 
+                model=model,
                 contents=full_prompt,
                 config={"system_instruction": system_instruction}
             )

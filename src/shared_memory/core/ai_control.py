@@ -79,7 +79,10 @@ def parse_retry_delay(error: Exception) -> float | None:
 
 
 def retry_on_ai_quota(
-    max_retries: int = 5, initial_backoff: float = 1.0, rotate_models: bool = True, pool_name: str = "generation"
+    max_retries: int = 5,
+    initial_backoff: float = 1.0,
+    rotate_models: bool = True,
+    pool_name: str = "generation",
 ):
     """
     Decorator for retrying AI API calls on 429 RESOURCE_EXHAUSTED errors.
@@ -123,8 +126,9 @@ def retry_on_ai_quota(
                                 cycle_count = attempt // len(models)
                                 wait_time = wait_time or (initial_backoff * (2**cycle_count))
                                 logger.warning(
-                                    f"All models in pool '{pool_name}' exhausted or errored. Cycle {cycle_count + 1} "
-                                    f"complete. Waiting {wait_time:.2f}s before restarting..."
+                                    f"All models in pool '{pool_name}' exhausted or errored. "
+                                    f"Cycle {cycle_count + 1} complete. Waiting {wait_time:.2f}s "
+                                    "before restarting..."
                                 )
                                 await asyncio.sleep(wait_time)
                             else:
@@ -137,8 +141,8 @@ def retry_on_ai_quota(
                             # Just exponential backoff without rotation
                             wait_time = wait_time or (initial_backoff * (2**attempt))
                             logger.warning(
-                                f"API error or quota limit reached for pool '{pool_name}'. Attempt {attempt + 1}. "
-                                f"Waiting {wait_time:.2f}s..."
+                                f"API error or quota limit reached for pool '{pool_name}'. "
+                                f"Attempt {attempt + 1}. Waiting {wait_time:.2f}s..."
                             )
                             await asyncio.sleep(wait_time)
                         continue

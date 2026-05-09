@@ -159,7 +159,13 @@ async def get_dashboard_html(request):
         }
 
         .time { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
-        .action { font-weight: 600; color: var(--accent-secondary); text-transform: uppercase; font-size: 0.75rem; margin-right: 0.5rem; }
+        .action { 
+            font-weight: 600; 
+            color: var(--accent-secondary); 
+            text-transform: uppercase; 
+            font-size: 0.75rem; 
+            margin-right: 0.5rem; 
+        }
         .agent-name { color: var(--text-secondary); font-size: 0.875rem; }
 
         /* Conflict Items */
@@ -171,8 +177,18 @@ async def get_dashboard_html(request):
             margin-bottom: 1rem;
         }
 
-        .conflict-meta { font-size: 0.875rem; margin-bottom: 1rem; display: flex; justify-content: space-between; }
-        .conflict-reason { color: var(--warning); font-size: 0.875rem; margin-bottom: 1rem; font-style: italic; }
+        .conflict-meta { 
+            font-size: 0.875rem; 
+            margin-bottom: 1rem; 
+            display: flex; 
+            justify-content: space-between; 
+        }
+        .conflict-reason { 
+            color: var(--warning); 
+            font-size: 0.875rem; 
+            margin-bottom: 1rem; 
+            font-style: italic; 
+        }
 
         .diff-container {
             display: grid;
@@ -189,8 +205,16 @@ async def get_dashboard_html(request):
             white-space: pre-wrap;
         }
 
-        .old { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #fecaca; }
-        .new { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: #a7f3d0; }
+        .old { 
+            background: rgba(239, 68, 68, 0.1); 
+            border: 1px solid rgba(239, 68, 68, 0.2); 
+            color: #fecaca; 
+        }
+        .new { 
+            background: rgba(16, 185, 129, 0.1); 
+            border: 1px solid rgba(16, 185, 129, 0.2); 
+            color: #a7f3d0; 
+        }
 
         .btn-group { display: flex; gap: 0.5rem; }
         button {
@@ -204,8 +228,16 @@ async def get_dashboard_html(request):
 
         .btn-approve { background: var(--success); color: white; }
         .btn-approve:hover { filter: brightness(1.1); transform: translateY(-1px); }
-        .btn-reject { background: transparent; border: 1px solid var(--glass-border); color: var(--text-secondary); }
-        .btn-reject:hover { background: rgba(239, 68, 68, 0.1); color: var(--danger); border-color: var(--danger); }
+        .btn-reject { 
+            background: transparent; 
+            border: 1px solid var(--glass-border); 
+            color: var(--text-secondary); 
+        }
+        .btn-reject:hover { 
+            background: rgba(239, 68, 68, 0.1); 
+            color: var(--danger); 
+            border-color: var(--danger); 
+        }
 
         .empty-state { text-align: center; color: var(--text-secondary); padding: 2rem; }
 
@@ -240,7 +272,8 @@ async def get_dashboard_html(request):
                 <div class="card">
                     <h2 class="section-title">System Insights</h2>
                     <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
-                        Trust is built through transparency. This dashboard allows you to audit the "Blackboard" of your team's AI agents.
+                        Trust is built through transparency. This dashboard allows you 
+                        to audit the "Blackboard" of your team's AI agents.
                     </p>
                 </div>
                 <div class="card">
@@ -266,7 +299,8 @@ async def get_dashboard_html(request):
                         '<span class="action">' + item.action + '</span>' +
                         '<span style="font-weight: 500;">' + item.cid + '</span>' +
                         '<span class="agent-name">by ' + item.agent + '</span>' +
-                        '<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">Table: ' + item.table + '</div>' +
+                        '<div style="font-size: 0.75rem; color: var(--text-secondary); ' + 
+                        'margin-top: 0.5rem;">Table: ' + item.table + '</div>' +
                         '</div></div>'
                     ).join('');
                 });

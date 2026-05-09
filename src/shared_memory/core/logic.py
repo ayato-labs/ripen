@@ -98,7 +98,8 @@ def normalize_bank_files(bank_files: Any) -> dict[str, str]:
                     bank_files.get("filename") or bank_files.get("name") or "derived_knowledge.md"
                 )
                 if content:
-                    result[str(filename)] = normalize_text(str(content), truncate=0) # No truncate for bank files
+                    # No truncate for bank files
+                    result[str(filename)] = normalize_text(str(content), truncate=0)
                 return result
             return {str(k): normalize_text(str(v), truncate=0) for k, v in bank_files.items() if v}
 
