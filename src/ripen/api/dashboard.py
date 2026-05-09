@@ -2,9 +2,11 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, Router
 
 from ripen.ops import management
+from ripen.infra.uow import UnitOfWork, SecureWriteContext
 
 
 async def get_dashboard_html(request):
+    # (HTML content remains the same)
     html_content = """
 <!DOCTYPE html>
 <html lang="ja">
@@ -326,21 +328,26 @@ async def get_dashboard_html(request):
 """
     return HTMLResponse(content=html_content)
 
+
 async def api_history(request):
     limit = int(request.query_params.get("limit", 20))
-    history = await management.get_audit_history_logic(limit=limit)
+    async with UnitOfWork() as uow:
+        history = await management.get_audit_history_logic(uow, limit=limit)
     return JSONResponse(history)
 
 
 async def api_conflicts(request):
-    conflicts = await management.get_unresolved_conflicts_logic()
+    async with UnitOfWork() as uow:
+        conflicts = await management.get_unresolved_conflicts_logic(uow)
     return JSONResponse(conflicts)
 
 
 async def api_resolve_conflict(request):
     conflict_id = int(request.path_params.get("id"))
     action = request.query_params.get("action", "approve")
-    result = await management.resolve_conflict_logic(conflict_id, action)
+    async with SecureWriteContext() as uow:
+        result = await management.resolve_conflict_logic(uow, conflict_id, action)
+        await uow.commit()
     return JSONResponse({"status": "success", "message": result})
 
 
