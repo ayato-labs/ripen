@@ -1,10 +1,12 @@
+
 import pytest
-import asyncio
-from ripen.core.logic import save_memory_core, save_troubleshooting_knowledge_core
-from ripen.core.search import perform_search, perform_keyword_search
+
 from ripen.cli.salvage import salvage_related_knowledge
+from ripen.core.logic import save_memory_core, save_troubleshooting_knowledge_core
+from ripen.core.search import perform_keyword_search, perform_search
 from ripen.core.thought_logic import process_thought_core
 from ripen.infra.database import init_db
+
 
 @pytest.mark.asyncio
 async def test_maturity_ranking_logic():

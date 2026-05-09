@@ -1,10 +1,12 @@
-import asyncio
 import json
-import pytest
+
 import aiosqlite
-from ripen.core.logic import save_memory_core, read_memory_core
+import pytest
+
+from ripen.core.logic import save_memory_core
 from ripen.core.search import perform_search
-from ripen.infra.database import async_get_connection, get_db_path
+from ripen.infra.database import get_db_path
+
 
 @pytest.mark.asyncio
 async def test_hybrid_search_scoring_and_audit(fake_llm):

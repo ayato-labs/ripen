@@ -353,7 +353,7 @@ def main():
         _kill_port_process(args.port)
         
         print("\n" + "="*50)
-        print(f"\033[1;32m✅ Ripen v0.1.0 is running (SSE Mode)\033[0m")
+        print("\033[1;32m✅ Ripen v0.1.0 is running (SSE Mode)\033[0m")
         print(f"  Transport: \033[1;36mSSE on port {args.port}\033[0m")
         print(f"  LLM:       \033[1;33m{settings.llm_provider} ({settings.generative_model})\033[0m")
         print(f"  Data:      \033[1;34m{settings.base_dir}\033[0m")

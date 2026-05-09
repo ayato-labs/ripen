@@ -216,7 +216,12 @@ async def get_dashboard_html(request):
             border-radius: 50%;
         }
 
-        .empty-state { text-align: center; color: var(--text-secondary); padding: 2rem; font-size: 0.875rem; }
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 2rem;
+            font-size: 0.875rem;
+        }
 
         @media (max-width: 900px) {
             .grid { grid-template-columns: 1fr; }
@@ -253,10 +258,12 @@ async def get_dashboard_html(request):
 
                 <div class="card">
                     <h2 class="section-title">Hub Status</h2>
-                    <div id="stats" style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.8;">
+                    <div id="stats" style="font-size: 0.875rem; color: var(--text-secondary);
+                        line-height: 1.8;">
                         <div style="display: flex; justify-content: space-between;">
                             <span>Role:</span>
-                            <span style="color: var(--text-primary); font-weight: 600;">Central Hub</span>
+                            <span style="color: var(--text-primary); font-weight: 600;">
+                                Central Hub</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
                             <span>Transport:</span>

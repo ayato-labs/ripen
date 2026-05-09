@@ -1,10 +1,9 @@
-import asyncio
-import os
-import sqlite3
-import pytest
 import aiosqlite
-from ripen.core.thought_logic import process_thought_core, init_thoughts_db, get_thought_history
+import pytest
+
 from ripen.common.utils import get_thoughts_db_path
+from ripen.core.thought_logic import get_thought_history, process_thought_core
+
 
 @pytest.mark.asyncio
 async def test_thought_persistence_integrity():

@@ -169,7 +169,7 @@ async def perform_search(
             )
             metadata = await cursor.fetchall()
             meta_map = {m[0]: (m[1], m[2]) for m in metadata}
-            keyword_map = {r["id"]: r["score"] for r in keyword_results}
+            {r["id"]: r["score"] for r in keyword_results}
 
             results = []
             seen_cids = set()

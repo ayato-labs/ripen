@@ -1,10 +1,8 @@
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
-from ripen.common.config import settings
 from ripen.common.utils import get_logger
 
 logger = get_logger("init")
@@ -131,14 +129,14 @@ def main():
     if config["default_transport"] == "sse":
         print(f"  \033[1;36mripen --sse --port {config.get('sse_port', 8377)}\033[0m")
     else:
-        print(f"  \033[1;36mripen\033[0m")
+        print("  \033[1;36mripen\033[0m")
     
     if config["default_transport"] == "sse":
         import socket
         hostname = socket.gethostname()
         try:
             local_ip = socket.gethostbyname(hostname)
-        except:
+        except Exception:
             local_ip = "YOUR_IP"
         print(f"\nClient Connection URL: \033[1;33mhttp://{local_ip}:{config.get('sse_port', 8377)}\033[0m")
         print(f"Dashboard: \033[1;35mhttp://localhost:{config.get('sse_port', 8377)}/dashboard\033[0m")

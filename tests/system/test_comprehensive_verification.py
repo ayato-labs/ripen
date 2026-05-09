@@ -1,11 +1,12 @@
 import asyncio
-import json
-import os
 import sqlite3
-import pytest
+
 import aiosqlite
-from ripen.core.logic import save_memory_core, read_memory_core, synthesize_entity
+import pytest
+
+from ripen.core.logic import save_memory_core
 from ripen.infra.database import async_get_connection, get_db_path
+
 
 @pytest.mark.asyncio
 async def test_comprehensive_database_integrity(mock_llm):
