@@ -2,9 +2,9 @@ import asyncio
 import json
 import pytest
 import aiosqlite
-from shared_memory.core.logic import save_memory_core, read_memory_core
-from shared_memory.core.search import perform_search
-from shared_memory.infra.database import async_get_connection, get_db_path
+from ripen.core.logic import save_memory_core, read_memory_core
+from ripen.core.search import perform_search
+from ripen.infra.database import async_get_connection, get_db_path
 
 @pytest.mark.asyncio
 async def test_hybrid_search_scoring_and_audit(fake_llm):
@@ -80,7 +80,7 @@ async def test_search_isolation_by_status():
     """
     厳しいテスト: 非アクティブ（inactive/archived）な知識が検索にヒットしないことを検証。
     """
-    from shared_memory.core.logic import manage_knowledge_activation_core
+    from ripen.core.logic import manage_knowledge_activation_core
     
     await save_memory_core(entities=[{"name": "HiddenSecret", "description": "This should be hidden."}])
     

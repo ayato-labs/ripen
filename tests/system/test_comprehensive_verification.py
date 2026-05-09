@@ -4,8 +4,8 @@ import os
 import sqlite3
 import pytest
 import aiosqlite
-from shared_memory.core.logic import save_memory_core, read_memory_core, synthesize_entity
-from shared_memory.infra.database import async_get_connection, get_db_path
+from ripen.core.logic import save_memory_core, read_memory_core, synthesize_entity
+from ripen.infra.database import async_get_connection, get_db_path
 
 @pytest.mark.asyncio
 async def test_comprehensive_database_integrity(mock_llm):

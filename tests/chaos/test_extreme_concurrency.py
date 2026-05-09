@@ -2,9 +2,9 @@ import asyncio
 import random
 import pytest
 import aiosqlite
-from shared_memory.core.logic import save_memory_core, read_memory_core
-from shared_memory.infra.database import async_get_connection, get_db_path
-from shared_memory.common.tasks import wait_for_background_tasks
+from ripen.core.logic import save_memory_core, read_memory_core
+from ripen.infra.database import async_get_connection, get_db_path
+from ripen.common.tasks import wait_for_background_tasks
 
 @pytest.mark.asyncio
 async def test_extreme_concurrency_and_data_durability(fake_llm):

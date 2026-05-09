@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from shared_memory.core.logic import save_memory_core, read_memory_core
+from ripen.core.logic import save_memory_core, read_memory_core
 
 @pytest.mark.asyncio
 async def test_knowledge_pipeline_integration(mock_llm):
@@ -25,7 +25,7 @@ async def test_knowledge_pipeline_integration(mock_llm):
     assert "IntegrationEntity" in str(read_result["graph"])
     
     # 裏取り: 実際にDBに1件入っているか
-    from shared_memory.infra.database import async_get_connection
+    from ripen.infra.database import async_get_connection
     async with await async_get_connection() as conn:
         cursor = await conn.execute("SELECT COUNT(*) as cnt FROM entities WHERE name = 'IntegrationEntity'")
         row = await cursor.fetchone()

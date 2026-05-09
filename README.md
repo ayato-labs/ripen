@@ -1,4 +1,4 @@
-# SharedMemoryServer: The "Trust Layer" for Multi-Agent AI Teams 🧠
+# Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
 
 **The Centralized Knowledge Hub for AI-Driven Development Teams**
 
@@ -25,7 +25,7 @@ This is **"AI Multi-Personality Disorder"** — and it's the hidden cost of high
 
 ## The Solution
 
-**SharedMemoryServer** is a centralized, local-first MCP server that gives all your AI tools a single shared memory.
+**Ripen** is a centralized, local-first MCP server that gives all your AI tools a single shared memory.
 
 One server. Every tool reads from it. Every tool writes to it. **Design decisions persist. Context survives. Your team's AI agents finally speak the same language.**
 
@@ -36,7 +36,7 @@ graph LR
         A2["⌨️ Claude Code"]
         A3["🔧 Gemini CLI"]
     end
-    subgraph "SharedMemoryServer"
+    subgraph "Ripen"
         M["📋 Shared Blackboard"]
         M --> G["Logic Graph"]
         M --> B["Memory Bank"]
@@ -132,7 +132,7 @@ To enable secure multi-agent access:
 ```
 2. In your tool configuration (e.g., `mcp_config.json`), inject the key via environment variables:
 ```json
-"SharedMemoryServer": {
+"Ripen": {
   "command": "npx",
   "args": ["-y", "mcp-remote", "http://localhost:8377/sse"],
   "env": {
@@ -164,7 +164,7 @@ AI駆動開発によって開発速度は圧倒的に向上しました。
 
 ### 解決策：中央集権型のナレッジ共有MCPサーバー
 
-**SharedMemoryServer** は、すべてのAIツールが同じ「黒板（ブラックボード）」を読み書きできる、ローカルファーストの共有メモリサーバーです。
+**Ripen** は、すべてのAIツールが同じ「黒板（ブラックボード）」を読み書きできる、ローカルファーストの共有メモリサーバーです。
 
 一度教えた設計思想は、どのAIツールからでも参照できます。チームの暗黙知を、AIが忘れない場所に置く。それがこのプロジェクトの目的です。
 
@@ -174,4 +174,4 @@ AI駆動開発によって開発速度は圧倒的に向上しました。
 
 ---
 
-*SharedMemoryServer: Making AI agents remember what your team already decided.*
+*Ripen: Making AI agents remember what your team already decided.*

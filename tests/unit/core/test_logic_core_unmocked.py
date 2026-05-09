@@ -1,29 +1,53 @@
 import pytest
-from shared_memory.core.logic import save_memory_core, normalize_entities
-from shared_memory.infra.database import async_get_connection
+from ripen.core.logic import save_memory_core, normalize_entities
+from ripen.infra.database import async_get_connection
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_save_memory_core_no_mocks(fake_llm):
     """
-    単体テスト: Mock(MagicMock)を使用せず、Fake implementationを使用して
-    save_memory_coreの基本的な保存動作を検証する。
+    単体テスト: Mockを使用せず、Fake implementationを使用して
+    すべてのデータ型（エンティティ、関係、観察、バンク）の保存とDB裏取りを行う。
     """
-    # 準備
-    entities = [{"name": "UnitEntity", "entity_type": "Unit", "description": "Unit test description"}]
+    # 1. 準備
+    entities = [{"name": "UnitNode", "description": "Unit desc"}]
+    relations = [{"subject": "UnitNode", "object": "Other", "predicate": "related"}]
+    observations = [{"entity_name": "UnitNode", "content": "Unit fact"}]
+    bank_files = {"unit.md": "Unit content"}
     
-    # 実行
-    result = await save_memory_core(entities=entities)
+    # 2. 実行
+    result = await save_memory_core(
+        entities=entities,
+        relations=relations,
+        observations=observations,
+        bank_files=bank_files,
+        agent_id="unmocked_tester"
+    )
     
-    # 修正: 文字列が含まれているかを確認
     assert "SAVED" in result.upper()
     
-    # データベースの裏取り
+    # 3. データベースの裏取り (Direct SQL)
     async with await async_get_connection() as conn:
-        cursor = await conn.execute("SELECT * FROM entities WHERE name = 'UnitEntity'")
-        row = await cursor.fetchone()
-        assert row is not None
-        assert row["entity_type"] == "Unit"
+        # Entities
+        cursor = await conn.execute("SELECT * FROM entities WHERE name = 'UnitNode'")
+        assert await cursor.fetchone() is not None
+        
+        # Relations
+        cursor = await conn.execute("SELECT * FROM relations WHERE subject = 'UnitNode'")
+        assert await cursor.fetchone() is not None
+        
+        # Observations
+        cursor = await conn.execute("SELECT * FROM observations WHERE entity_name = 'UnitNode'")
+        assert await cursor.fetchone() is not None
+        
+        # Bank Files
+        cursor = await conn.execute("SELECT * FROM bank_files WHERE filename = 'unit.md'")
+        assert await cursor.fetchone() is not None
+        
+        # Audit Logs (トレーサビリティの裏取り)
+        cursor = await conn.execute("SELECT COUNT(*) FROM audit_logs WHERE agent_id = 'unmocked_tester'")
+        count = (await cursor.fetchone())[0]
+        assert count >= 3
 
 @pytest.mark.unit
 def test_normalize_entities_pure():

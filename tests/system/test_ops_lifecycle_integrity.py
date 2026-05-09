@@ -3,13 +3,13 @@ import os
 import sqlite3
 import pytest
 import aiosqlite
-from shared_memory.core.logic import (
+from ripen.core.logic import (
     save_memory_core, 
     manage_knowledge_activation_core, 
     list_inactive_knowledge_core,
     admin_run_knowledge_gc_core
 )
-from shared_memory.infra.database import async_get_connection, get_db_path
+from ripen.infra.database import async_get_connection, get_db_path
 
 @pytest.mark.asyncio
 async def test_knowledge_lifecycle_management_integrity(mock_llm):

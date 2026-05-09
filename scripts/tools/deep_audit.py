@@ -8,7 +8,7 @@ from datetime import datetime
 project_root = os.getcwd()
 sys.path.insert(0, os.path.join(project_root, "src"))
 
-from shared_memory.common.utils import get_db_path, get_thoughts_db_path
+from ripen.common.utils import get_db_path, get_thoughts_db_path
 
 def audit_db(name, path):
     print(f"\n--- Auditing {name} ---")
