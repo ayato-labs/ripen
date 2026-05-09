@@ -213,6 +213,25 @@ async def synthesize_entity(entity_name: str) -> str:
 
 @mcp.tool(
     description=(
+        "Explicitly save verified troubleshooting knowledge, bug fixes, or complex workarounds. "
+        "This is stored in a premium 'Stable' layer and is prioritized during retrieval."
+    )
+)
+async def save_troubleshooting_knowledge(
+    title: str,
+    solution: str,
+    affected_functions: list[str] | None = None,
+    env_metadata: dict | None = None,
+) -> str:
+    """Explicitly save verified troubleshooting knowledge."""
+
+    return await logic_module.save_troubleshooting_knowledge_core(
+        title, solution, affected_functions, env_metadata
+    )
+
+
+@mcp.tool(
+    description=(
         "Retrieve the structural relationships (graph) of knowledge. "
         "Use this to understand dependencies, hierarchical connections, "
         "and how different entities relate to each other."
@@ -334,7 +353,7 @@ def main():
         _kill_port_process(args.port)
         
         print("\n" + "="*50)
-        print(f"\033[1;32m✅ Ripen v0.1.0 is running (SSE Mode)\033[0m")
+        print("\033[1;32m✅ Ripen v0.1.0 is running (SSE Mode)\033[0m")
         print(f"  Transport: \033[1;36mSSE on port {args.port}\033[0m")
         print(f"  LLM:       \033[1;33m{settings.llm_provider} ({settings.generative_model})\033[0m")
         print(f"  Data:      \033[1;34m{settings.base_dir}\033[0m")

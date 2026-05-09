@@ -386,6 +386,7 @@ async def init_db(force: bool = False):
                 affected_functions TEXT,
                 env_metadata TEXT,
                 access_count INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'active',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -432,6 +433,12 @@ async def init_db(force: bool = False):
             CREATE VIRTUAL TABLE IF NOT EXISTS bank_files_fts USING fts5(
                 filename, content, 
                 content='bank_files'
+            )
+        """)
+        await cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS troubleshooting_knowledge_fts USING fts5(
+                title, solution, affected_functions,
+                content='troubleshooting_knowledge', content_rowid='id'
             )
         """)
 
@@ -501,10 +508,33 @@ async def init_db(force: bool = False):
             END;
         """)
 
+        # FTS Triggers: troubleshooting_knowledge
+        await cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS troubleshooting_ai AFTER INSERT ON troubleshooting_knowledge BEGIN
+                INSERT INTO troubleshooting_knowledge_fts(rowid, title, solution, affected_functions) 
+                VALUES (new.id, new.title, new.solution, new.affected_functions);
+            END;
+        """)
+        await cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS troubleshooting_ad AFTER DELETE ON troubleshooting_knowledge BEGIN
+                INSERT INTO troubleshooting_knowledge_fts(troubleshooting_knowledge_fts, rowid, title, solution, affected_functions) 
+                VALUES('delete', old.id, old.title, old.solution, old.affected_functions);
+            END;
+        """)
+        await cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS troubleshooting_au AFTER UPDATE ON troubleshooting_knowledge BEGIN
+                INSERT INTO troubleshooting_knowledge_fts(troubleshooting_knowledge_fts, rowid, title, solution, affected_functions) 
+                VALUES('delete', old.id, old.title, old.solution, old.affected_functions);
+                INSERT INTO troubleshooting_knowledge_fts(rowid, title, solution, affected_functions) 
+                VALUES (new.id, new.title, new.solution, new.affected_functions);
+            END;
+        """)
+
         # Population: Ensure existing data is indexed
         await cursor.execute("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
         await cursor.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
         await cursor.execute("INSERT INTO bank_files_fts(bank_files_fts) VALUES('rebuild')")
+        await cursor.execute("INSERT INTO troubleshooting_knowledge_fts(troubleshooting_knowledge_fts) VALUES('rebuild')")
 
         await conn.commit()
 

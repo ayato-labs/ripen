@@ -1,15 +1,13 @@
-import asyncio
-import os
-import sqlite3
 import pytest
-import aiosqlite
+
 from ripen.core.logic import (
-    save_memory_core, 
-    manage_knowledge_activation_core, 
+    admin_run_knowledge_gc_core,
     list_inactive_knowledge_core,
-    admin_run_knowledge_gc_core
+    manage_knowledge_activation_core,
+    save_memory_core,
 )
-from ripen.infra.database import async_get_connection, get_db_path
+from ripen.infra.database import async_get_connection
+
 
 @pytest.mark.asyncio
 async def test_knowledge_lifecycle_management_integrity(mock_llm):

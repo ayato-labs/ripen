@@ -1,10 +1,13 @@
 import asyncio
 import random
-import pytest
+
 import aiosqlite
-from ripen.core.logic import save_memory_core, read_memory_core
-from ripen.infra.database import async_get_connection, get_db_path
+import pytest
+
 from ripen.common.tasks import wait_for_background_tasks
+from ripen.core.logic import read_memory_core, save_memory_core
+from ripen.infra.database import get_db_path
+
 
 @pytest.mark.asyncio
 async def test_extreme_concurrency_and_data_durability(fake_llm):
@@ -32,7 +35,7 @@ async def test_extreme_concurrency_and_data_durability(fake_llm):
 
     # 3. 同時実行
     tasks = [worker(i) for i in range(num_concurrent)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    await asyncio.gather(*tasks, return_exceptions=True)
 
     # 4. バックグラウンドタスク（蒸留など）の完了を待機
     await wait_for_background_tasks(timeout=10.0)

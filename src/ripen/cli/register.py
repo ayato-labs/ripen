@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -141,7 +140,7 @@ def register_mcp(dry_run=False, transport="stdio", port=8377, hub_url: str | Non
 
     register_single_mcp(config_paths, server_name, mcp_config, dry_run=dry_run)
 
-    print(f"\n--- System Prompt Integration ---")
+    print("\n--- System Prompt Integration ---")
     prompt_files = get_prompt_files()
     for p in prompt_files:
         if not p.parent.exists() and not dry_run:

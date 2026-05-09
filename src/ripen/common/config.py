@@ -58,7 +58,7 @@ class Settings:
         config_path = self.base_dir / "config.json"
         if config_path.exists():
             try:
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     self._config_data = json.load(f)
                 logger.info(f"Loaded config from {config_path}")
             except Exception as e:

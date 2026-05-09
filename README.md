@@ -1,31 +1,37 @@
-# Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
+﻿# Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
 
-**Centralized Knowledge Hub for AI-Driven Development. One server. Every tool. Every teammate.**
+**Centralized Knowledge Hub for AI-Driven Development. Designed for Local and Small-Team workflows.**
 
 [![PyPI - Version](https://img.shields.io/pypi/v/ripen)](https://pypi.org/project/ripen/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Beta-orange)](CHANGELOG.md)
 
-> 🇯🇵 **ローカルホストのSSEサーバーを起動するだけで、チームの全AIエージェントが同じ知識を共有できる。Ripenは「AI駆動開発チームの共有記憶インフラ」です。**
+> 🇯🇵 **Claude Code・Cursor・Antigravity・Gemini CLI——違うアカウントを使った別の人のPCで稼働するAIエージェントとの間でも、知識を共有できる。これが Ripen の根本的な価値です。**
 
 ---
 
 ## What Makes Ripen Different
 
-Most MCP memory servers run in `stdio` mode — a 1:1 connection between **one IDE and one server**. Knowledge stays siloed.
+Most MCP memory servers run in `stdio` mode — a 1:1 connection between **one IDE and one server**. Knowledge stays siloed inside that single process, invisible to any other tool or person.
 
-**Ripen runs as an SSE Hub** — an HTTP server that accepts **N:1 connections**. Multiple agents, multiple IDEs, multiple teammates, all reading and writing to the same shared brain simultaneously.
+**Ripen runs as an SSE Hub** — an HTTP server that accepts **N:1 connections**. Multiple agents, multiple IDEs, multiple teammates on **different machines with different accounts**, all reading and writing to the same shared brain simultaneously.
+
+> **Note on Scale**: Ripen is currently optimized for **local multi-agent usage or small teams (2-3 people)**. It uses SQLite + WAL mode under the hood, which provides excellent local concurrency but is not designed for high-throughput network writes from large distributed teams.
+
+> **Privacy Warning**: Ripen uses background processes (`incremental_distill_knowledge`) to organize memory. **If you configure an external LLM (like Gemini or OpenAI), snippets of your codebase and prompts may be sent to these external APIs.** For strict enterprise environments, we strongly recommend using a local LLM via Ollama.
 
 ```
-[Typical MCP Memory]          [Ripen Hub Mode]
+[Typical MCP Memory]                    [Ripen Hub Mode]
 
-Cursor ──── memory-A          Cursor ──┐
-                              Claude ──┼──▶ Ripen Hub ◀── shared knowledge
-Claude ──── memory-B          Gemini ──┘    (one source of truth)
-                              Teammate's Cursor ──┘
+Dev A: Cursor   -- memory-A             Dev A: Cursor     ----+
+Dev A: Claude   -- memory-B             Dev A: Antigravity ---+
+                                        Dev B: Claude Code ---+--> Ripen Hub
+Dev B: Cursor   -- memory-C             Dev B: Gemini CLI  ---+
+                                        CI Agent -------------+
+  No shared knowledge                   Zero manual sync
 ```
 
-This is the **core innovation**: automated cross-agent, cross-user knowledge sharing via a local SSE server.
+This is the **core innovation**: automated cross-agent, cross-user, cross-machine knowledge sharing via a local SSE server.
 
 ---
 
@@ -84,21 +90,22 @@ graph TD
         H --> DASH["Dashboard\nlocalhost:8377/dashboard"]
     end
 
-    subgraph "Developer A"
+    subgraph "Developer A のPC"
         A1["🖥️ Cursor"] -->|MCP SSE| H
-        A2["⌨️ Claude Code"] -->|MCP SSE| H
+        A2["🤖 Antigravity"] -->|MCP SSE| H
     end
 
-    subgraph "Developer B (teammate)"
-        B1["🖥️ Cursor"] -->|MCP SSE| H
+    subgraph "Developer B のPC（別アカウント）"
+        B1["⌨️ Claude Code"] -->|MCP SSE| H
+        B2["🔧 Gemini CLI"] -->|MCP SSE| H
     end
 
     subgraph "CI / Automation"
-        C1["🤖 Gemini CLI"] -->|MCP SSE| H
+        C1["⚙️ GitHub Actions Agent"] -->|MCP SSE| H
     end
 ```
 
-**One Hub. N Clients. Zero manual sync.**
+**One Hub. N Clients. Different PCs. Different accounts. Zero manual sync.**
 
 ---
 
@@ -172,11 +179,13 @@ Download from [GitHub Releases](https://github.com/ayato-labs/ripen/releases) �
 
 ### 他のMCPメモリサーバーとの根本的な違い
 
-一般的なMCPメモリサーバーは `stdio` モードで動作し、**1つのIDEと1つのサーバー**が1:1で接続されます。知識はそのIDEの中に閉じています。
+一般的なMCPメモリサーバーは `stdio` モードで動作し、**1つのIDEと1つのサーバー**が1:1で接続されます。知識はそのIDEのプロセス内に閉じており、他のツールや他のユーザーからは参照できません。
 
-**Ripenは `SSEハブ` として動作します。** HTTPサーバーとして常駐し、複数のIDE・複数のメンバーが同時に読み書きできます。Aさんの Cursor が保存した設計決定を、Bさんの Claude Code が即座に参照できます。
+**Ripenは `SSEハブ` として動作します。** HTTPサーバーとして常駐し、複数のIDE・複数のメンバーが同時に読み書きできます。
 
-これが**唯一の根本的な差別化ポイント**です。「AIチームの共有黒板」。
+> **最大のポイント**: Claude Code・Cursor・Antigravity・Gemini CLI の間で知識を共有できます。しかも、**違うアカウントを使った別の人のPCで稼働するAIエージェントとの間でも。**
+>
+> これは「便利な追加機能」ではなく、エージェントフレームワークが構造的に実現不可能な**唯一の機能**です。
 
 ### セットアップ
 

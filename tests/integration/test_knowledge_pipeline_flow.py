@@ -1,6 +1,8 @@
+
 import pytest
-from unittest.mock import MagicMock
-from ripen.core.logic import save_memory_core, read_memory_core
+
+from ripen.core.logic import read_memory_core, save_memory_core
+
 
 @pytest.mark.asyncio
 async def test_knowledge_pipeline_integration(mock_llm):

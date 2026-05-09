@@ -1,6 +1,8 @@
 import pytest
-from ripen.core.logic import save_memory_core, normalize_entities
+
+from ripen.core.logic import normalize_entities, save_memory_core
 from ripen.infra.database import async_get_connection
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
