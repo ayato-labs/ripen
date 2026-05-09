@@ -491,3 +491,41 @@ async def admin_run_knowledge_gc_core(age_days: int = 180, dry_run: bool = False
     except Exception:
         logger.exception("Garbage collection task failed")
         raise
+
+
+async def save_troubleshooting_knowledge_core(
+    title: str,
+    solution: str,
+    affected_functions: list[str] | str | None = None,
+    env_metadata: dict[str, Any] | None = None,
+) -> str:
+    """
+    Saves high-signal troubleshooting knowledge to the premium STABLE layer.
+    """
+    local_logger = logger.bind(operation="save_troubleshooting")
+    local_logger.info(f"Saving troubleshooting knowledge: {title}")
+
+    try:
+        await init_db()
+        async with get_write_semaphore():
+            async with await async_get_connection() as conn:
+                affected = (
+                    json.dumps(affected_functions)
+                    if isinstance(affected_functions, list)
+                    else str(affected_functions or "")
+                )
+                env = json.dumps(env_metadata or {})
+
+                await conn.execute(
+                    """
+                    INSERT INTO troubleshooting_knowledge (title, solution, affected_functions, env_metadata)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (title, solution, affected, env),
+                )
+                await conn.commit()
+                local_logger.info("Troubleshooting knowledge saved successfully")
+                return f"Successfully saved troubleshooting knowledge: {title}"
+    except Exception as e:
+        local_logger.exception("Failed to save troubleshooting knowledge")
+        return f"Error: {e}"

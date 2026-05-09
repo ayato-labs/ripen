@@ -213,6 +213,25 @@ async def synthesize_entity(entity_name: str) -> str:
 
 @mcp.tool(
     description=(
+        "Explicitly save verified troubleshooting knowledge, bug fixes, or complex workarounds. "
+        "This is stored in a premium 'Stable' layer and is prioritized during retrieval."
+    )
+)
+async def save_troubleshooting_knowledge(
+    title: str,
+    solution: str,
+    affected_functions: list[str] | None = None,
+    env_metadata: dict | None = None,
+) -> str:
+    """Explicitly save verified troubleshooting knowledge."""
+
+    return await logic_module.save_troubleshooting_knowledge_core(
+        title, solution, affected_functions, env_metadata
+    )
+
+
+@mcp.tool(
+    description=(
         "Retrieve the structural relationships (graph) of knowledge. "
         "Use this to understand dependencies, hierarchical connections, "
         "and how different entities relate to each other."
