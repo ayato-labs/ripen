@@ -22,6 +22,7 @@ from ripen.infra.database import (
     async_get_thoughts_connection,
     retry_on_db_lock,
 )
+from ripen.infra.repository import ThoughtRepository
 
 logger = get_logger("thought_logic")
 
@@ -49,87 +50,24 @@ async def init_thoughts_db(force: bool = False):
     log_info(f"Initializing thoughts database at {db_path}...")
     async with await _async_get_connection_raw(db_path, is_thoughts=True) as conn:
         # Tables for thoughts
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS thought_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                thought_number INTEGER NOT NULL,
-                total_thoughts INTEGER NOT NULL,
-                thought TEXT NOT NULL,
-                next_thought_needed BOOLEAN,
-                is_revision BOOLEAN DEFAULT 0,
-                revises_thought INTEGER,
-                branch_from_thought INTEGER,
-                branch_id TEXT,
-                distilled BOOLEAN DEFAULT 0,
-                meta_data TEXT,
-                agent_id TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        await ThoughtRepository.init_tables(conn)
+
         # Migration for existing databases
         cursor = await conn.cursor()
         await _add_column_if_missing(cursor, "thought_history", "distilled BOOLEAN DEFAULT 0")
         await _add_column_if_missing(cursor, "thought_history", "meta_data TEXT")
         await _add_column_if_missing(cursor, "thought_history", "agent_id TEXT")
 
-        # Indices for performance and efficient sequence lookups
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_thought_session ON thought_history (session_id)"
-        )
         # Unique constraint to prevent duplicate thought numbers within a session
         try:
-            await conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_thought_number_unique "
-                "ON thought_history (session_id, thought_number)"
-            )
+            await ThoughtRepository.apply_unique_index(conn)
         except aiosqlite.IntegrityError:
             logger.error(
                 "CRITICAL INTEGRITY WARNING: Duplicate thought_numbers detected in database. "
                 "Unique constraint could not be applied at the DB level. "
                 "Falling back to non-unique index. Please clean up duplicate data."
             )
-            await conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_thought_number "
-                "ON thought_history (session_id, thought_number)"
-            )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_thought_timestamp ON thought_history (timestamp)"
-        )
-        # --- Full Text Search (FTS5) Support for Thoughts ---
-        await conn.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS thought_history_fts USING fts5(
-                session_id, thought_number, thought, 
-                content='thought_history', content_rowid='id'
-            )
-        """)
-
-        # FTS Triggers for thought_history
-        await conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS thought_history_ai AFTER INSERT ON thought_history BEGIN
-                INSERT INTO thought_history_fts(rowid, session_id, thought_number, thought) 
-                VALUES (new.id, new.session_id, new.thought_number, new.thought);
-            END;
-        """)
-        await conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS thought_history_ad AFTER DELETE ON thought_history BEGIN
-                INSERT INTO thought_history_fts(thought_history_fts, rowid, 
-                                                 session_id, thought_number, thought) 
-                VALUES('delete', old.id, old.session_id, old.thought_number, old.thought);
-            END;
-        """)
-        await conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS thought_history_au AFTER UPDATE ON thought_history BEGIN
-                INSERT INTO thought_history_fts(thought_history_fts, rowid, 
-                                                 session_id, thought_number, thought) 
-                VALUES('delete', old.id, old.session_id, old.thought_number, old.thought);
-                INSERT INTO thought_history_fts(rowid, session_id, thought_number, thought) 
-                VALUES (new.id, new.session_id, new.thought_number, new.thought);
-            END;
-        """)
-
-        # Population: Ensure existing thoughts are indexed
-        await conn.execute("INSERT INTO thought_history_fts(thought_history_fts) VALUES('rebuild')")
+            await ThoughtRepository.apply_non_unique_index(conn)
 
         await conn.commit()
         _THOUGHTS_INITIALIZED = True
@@ -180,12 +118,7 @@ async def process_thought_core(
                 # 2. Validation: Check sequence integrity
                 # 2.1 Check for revisions
                 if is_revision and revises_thought:
-                    cursor = await conn.execute(
-                        "SELECT id FROM thought_history "
-                        "WHERE session_id = ? AND thought_number = ?",
-                        (session_id, revises_thought),
-                    )
-                    if not await cursor.fetchone():
+                    if not await ThoughtRepository.check_thought_exists(conn, session_id, revises_thought):
                         error_msg = (
                             f"Invalid revision: Thought #{revises_thought} "
                             f"does not exist in session '{session_id}'"
@@ -195,15 +128,10 @@ async def process_thought_core(
                             "thoughtNumber": thought_number,
                             "totalThoughts": total_thoughts,
                         }
-                
+
                 # 2.2 Explicit Duplicate Check (UX/Performance)
                 if not is_revision:
-                    cursor = await conn.execute(
-                        "SELECT id FROM thought_history "
-                        "WHERE session_id = ? AND thought_number = ?",
-                        (session_id, thought_number),
-                    )
-                    if await cursor.fetchone():
+                    if await ThoughtRepository.check_thought_exists(conn, session_id, thought_number):
                         error_msg = (
                             f"Duplicate thought number: #{thought_number} "
                             f"already exists in session '{session_id}'. "
@@ -219,39 +147,31 @@ async def process_thought_core(
                 # 3. Persistence: Insert thought with metadata (filled post-search)
                 t_db_start = time.perf_counter()
                 try:
-                    await conn.execute(
-                        """
-                        INSERT INTO thought_history (
-                            session_id, thought_number, total_thoughts, thought,
-                            next_thought_needed, is_revision, revises_thought,
-                            branch_from_thought, branch_id, agent_id, meta_data
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            session_id,
-                            thought_number,
-                            total_thoughts,
-                            masked_thought,
-                            1 if next_thought_needed else 0,
-                            1 if is_revision else 0,
-                            revises_thought,
-                            branch_from_thought,
-                            branch_id,
-                            agent_id,
-                            json.dumps({
-                                "env": "development",
-                                "timestamp": datetime.now().isoformat(),
-                            }),
-                        ),
+                    meta_data = json.dumps(
+                        {
+                            "env": "development",
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    await ThoughtRepository.insert_thought(
+                        conn,
+                        session_id,
+                        thought_number,
+                        total_thoughts,
+                        masked_thought,
+                        next_thought_needed,
+                        is_revision,
+                        revises_thought,
+                        branch_from_thought,
+                        branch_id,
+                        agent_id,
+                        meta_data,
                     )
                     await conn.commit()
                 except aiosqlite.IntegrityError as ie:
                     await conn.rollback()
                     error_msg = f"Persistence failure (Duplicate ID): {ie}"
-                    logger.error(
-                        f"{error_msg} for session {session_id}, "
-                        f"thought {thought_number}"
-                    )
+                    logger.error(f"{error_msg} for session {session_id}, " f"thought {thought_number}")
                     return {
                         "error": (
                             "Thought number already exists. "
@@ -261,18 +181,12 @@ async def process_thought_core(
                         "thoughtNumber": thought_number,
                         "totalThoughts": total_thoughts,
                     }
-                
+
                 dur_db = time.perf_counter() - t_db_start
 
                 # 4. Statistics
-                cursor = await conn.execute(
-                    "SELECT COUNT(*) FROM thought_history WHERE session_id = ?",
-                    (session_id,),
-                )
-                row = await cursor.fetchone()
-                history_length = row[0] if row else 0
-
-                branches = [r[0] for r in await cursor.fetchall()]
+                history_length = await ThoughtRepository.get_session_stats(conn, session_id)
+                branches = []
 
                 await conn.commit()
 
@@ -302,10 +216,8 @@ async def process_thought_core(
                     "env": "development",
                     "timestamp": datetime.now().isoformat(),
                 }
-                await conn.execute(
-                    "UPDATE thought_history SET meta_data = ? "
-                    "WHERE session_id = ? AND thought_number = ?",
-                    (json.dumps(search_meta), session_id, thought_number),
+                await ThoughtRepository.update_thought_metadata(
+                    conn, session_id, thought_number, json.dumps(search_meta)
                 )
                 await conn.commit()
 
@@ -324,10 +236,7 @@ async def process_thought_core(
                 # Ensure the complete history is analyzed one last time for synthesis
                 await auto_distill_knowledge(session_id, history)
                 async with await async_get_thoughts_connection() as conn:
-                    await conn.execute(
-                        "UPDATE thought_history SET distilled = 1 WHERE session_id = ?",
-                        (session_id,),
-                    )
+                    await ThoughtRepository.mark_session_distilled(conn, session_id)
                     await conn.commit()
 
             total_dur = time.perf_counter() - start_total
@@ -357,11 +266,7 @@ async def get_thought_history(session_id: str | None = None) -> list[dict[str, A
     try:
         async with await async_get_thoughts_connection() as conn:
             conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute(
-                "SELECT * FROM thought_history WHERE session_id = ? ORDER BY id ASC",
-                (session_id,),
-            )
-            rows = await cursor.fetchall()
+            rows = await ThoughtRepository.get_session_history(conn, session_id)
             return [dict(row) for row in rows]
     except Exception as e:
         log_error(f"Failed to retrieve history for session {session_id}", e)
@@ -384,19 +289,8 @@ async def recover_undistilled_sessions():
     """
     try:
         async with await async_get_thoughts_connection() as conn:
-            cursor = await conn.execute("""
-                SELECT DISTINCT session_id FROM thought_history
-                WHERE distilled = 0 AND next_thought_needed = 0
-            """)
-            sessions_to_recover = [row[0] for row in await cursor.fetchall()]
-
-            cursor = await conn.execute("""
-                SELECT DISTINCT session_id FROM thought_history
-                WHERE distilled = 0
-                GROUP BY session_id
-                HAVING MAX(timestamp) < datetime('now', '-30 minutes')
-            """)
-            stale_sessions = [row[0] for row in await cursor.fetchall()]
+            sessions_to_recover = await ThoughtRepository.get_undistilled_sessions(conn)
+            stale_sessions = await ThoughtRepository.get_stale_sessions(conn)
 
             all_to_process = list(set(sessions_to_recover + stale_sessions))
 
@@ -410,10 +304,7 @@ async def recover_undistilled_sessions():
                 history = await get_thought_history(sess_id)
                 if history:
                     await auto_distill_knowledge(sess_id, history)
-                    await conn.execute(
-                        "UPDATE thought_history SET distilled = 1 WHERE session_id = ?",
-                        (sess_id,),
-                    )
+                    await ThoughtRepository.mark_session_distilled(conn, sess_id)
                     await conn.commit()
     except Exception as e:
         log_error("Failed during opportunistic thought recovery", e)

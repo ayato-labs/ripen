@@ -544,6 +544,7 @@ async def get_graph_data(query: str | None = None):
                     }
                     for o in final_observations
                 ],
+                "troubleshooting": [],
             }
         else:
             entities, relations, observations = await GraphRepository.get_full_graph(conn)
@@ -558,4 +559,5 @@ async def get_graph_data(query: str | None = None):
                     }
                     for o in observations
                 ],
+                "troubleshooting": [],
             }
