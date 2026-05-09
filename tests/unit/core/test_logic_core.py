@@ -66,7 +66,8 @@ async def test_save_memory_core_deep_verification(db_conn, fake_llm):
         if row:
             assert row["access_count"] >= 0
         else:
-            # metadata might not have been initialized if update_access wasn't called for some reason
+            # metadata might not have been initialized if update_access 
+            # wasn't called for some reason
             pass
 
 
@@ -79,16 +80,20 @@ async def test_read_memory_core_data_extraction(db_conn):
     """
     # 事前投入
     await db_conn.execute(
-        "INSERT INTO entities (name, description, status) VALUES ('NodeA', 'DescA', 'active')"
+        "INSERT INTO entities (name, description, status) "
+        "VALUES ('NodeA', 'DescA', 'active')"
     )
     await db_conn.execute(
-        "INSERT INTO entities (name, description, status) VALUES ('NodeB', 'DescB', 'active')"
+        "INSERT INTO entities (name, description, status) "
+        "VALUES ('NodeB', 'DescB', 'active')"
     )
     await db_conn.execute(
-        "INSERT INTO relations (subject, predicate, object, status) VALUES ('NodeA', 'links_to', 'NodeB', 'active')"
+        "INSERT INTO relations (subject, predicate, object, status) "
+        "VALUES ('NodeA', 'links_to', 'NodeB', 'active')"
     )
     await db_conn.execute(
-        "INSERT INTO bank_files (filename, content, status) VALUES ('fileA.md', 'contentA', 'active')"
+        "INSERT INTO bank_files (filename, content, status) "
+        "VALUES ('fileA.md', 'contentA', 'active')"
     )
     await db_conn.commit()
 
