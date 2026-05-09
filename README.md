@@ -1,28 +1,63 @@
 # Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
 
-**Centralized Knowledge Hub for AI-Driven Development. One memory, every tool.**
+**Centralized Knowledge Hub for AI-Driven Development. One server. Every tool. Every teammate.**
 
 [![PyPI - Version](https://img.shields.io/pypi/v/ripen)](https://pypi.org/project/ripen/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Production--Ready-blue)](CHANGELOG.md)
+[![Status](https://img.shields.io/badge/Status-Beta-orange)](CHANGELOG.md)
 
-> 🇯🇵 **AIエージェント間の「暗黙知」を解消し、チーム開発における「知識の信頼性」を担保する、中央集権型・ローカルファーストの記憶インフラ。**
+> 🇯🇵 **ローカルホストのSSEサーバーを起動するだけで、チームの全AIエージェントが同じ知識を共有できる。Ripenは「AI駆動開発チームの共有記憶インフラ」です。**
 
 ---
 
-## 🚀 3-Minute Quick Start
+## What Makes Ripen Different
 
-The fastest way to give your AI agents a shared memory:
+Most MCP memory servers run in `stdio` mode — a 1:1 connection between **one IDE and one server**. Knowledge stays siloed.
 
-```bash
-# 1. Run the server (Zero-config, no install required)
-uvx ripen --sse
+**Ripen runs as an SSE Hub** — an HTTP server that accepts **N:1 connections**. Multiple agents, multiple IDEs, multiple teammates, all reading and writing to the same shared brain simultaneously.
 
-# 2. In a new terminal, run the setup wizard
-uvx ripen-init
+```
+[Typical MCP Memory]          [Ripen Hub Mode]
+
+Cursor ──── memory-A          Cursor ──┐
+                              Claude ──┼──▶ Ripen Hub ◀── shared knowledge
+Claude ──── memory-B          Gemini ──┘    (one source of truth)
+                              Teammate's Cursor ──┘
 ```
 
-**That's it.** The wizard will guide you through LLM setup and automatically register Ripen with **Cursor**, **Claude Desktop**, and more.
+This is the **core innovation**: automated cross-agent, cross-user knowledge sharing via a local SSE server.
+
+---
+
+## Quick Start
+
+### Hub Setup (Run once per project/team)
+
+```bash
+# Start the shared knowledge hub
+uvx ripen --sse
+
+# In a new terminal: interactive setup wizard
+uvx ripen-init
+# > Select mode: hub
+# Guides you through LLM config, data directory, and IDE registration
+# At the end, displays your Client Connection URL for teammates
+```
+
+### Client Setup (Every teammate runs this)
+
+```bash
+# No Python required. Just register your IDE to the hub.
+uvx ripen-init
+# > Select mode: client
+# > Hub URL: http://192.168.1.10:8377
+# Done. All your IDEs now share the team's memory.
+```
+
+Or with a single command:
+```bash
+uvx ripen-register --hub-url http://192.168.1.10:8377
+```
 
 ---
 
@@ -33,55 +68,69 @@ AI-driven development made your team 10x faster, but your knowledge is now scatt
 - **Isolated Context**: Cursor knows your coding conventions — but **Claude Code doesn't**.
 - **Memory Decay**: Gemini CLI resolved a bug yesterday — but **Cursor forgot it by today**.
 - **Architectural Drift**: Your team decided on a pattern — but **every AI tool proposes a different one**.
+- **Cross-User Silos**: Developer A's AI made a key decision — but **Developer B's AI has no idea**.
 
-The faster you ship, the faster your AI tools **diverge**. Ripen stops this drift by providing a **Single Source of Truth (SSoT)** for every agent in your workflow.
+The faster you ship, the faster your AI tools **diverge**. Ripen stops this drift with a **Single Source of Truth (SSoT)** shared by every agent on your team.
 
 ---
 
-## The Solution: A Shared "Brain" for All Agents
-
-**Ripen** is a centralized, local-first MCP server. One server. Every tool reads from it. Every tool writes to it.
+## Architecture: Hub & Clients
 
 ```mermaid
-graph LR
-    subgraph "Your AI Tools"
-        A1["🖥️ Cursor"]
-        A2["⌨️ Claude Code"]
-        A3["🔧 Gemini CLI"]
+graph TD
+    subgraph "Ripen Hub (runs once, on a team server or localhost)"
+        H["🧠 Ripen SSE Server\n(port 8377)"]
+        H --> DB["SQLite + FAISS\n(local, private)"]
+        H --> DASH["Dashboard\nlocalhost:8377/dashboard"]
     end
-    subgraph "Ripen Hub"
-        M["📋 Shared Blackboard"]
-        M --> G["Logic Graph"]
-        M --> B["Memory Bank"]
-        M --> T["Thought Log"]
+
+    subgraph "Developer A"
+        A1["🖥️ Cursor"] -->|MCP SSE| H
+        A2["⌨️ Claude Code"] -->|MCP SSE| H
     end
-    A1 <-->|MCP| M
-    A2 <-->|MCP| M
-    A3 <-->|MCP| M
+
+    subgraph "Developer B (teammate)"
+        B1["🖥️ Cursor"] -->|MCP SSE| H
+    end
+
+    subgraph "CI / Automation"
+        C1["🤖 Gemini CLI"] -->|MCP SSE| H
+    end
 ```
+
+**One Hub. N Clients. Zero manual sync.**
 
 ---
 
 ## Key Features
 
 ### 1. Hybrid Intelligence Store
-- **Logic Graph**: Stores entities and relations (e.g., *"Module X depends on Service Y"*).
+- **Logic Graph**: Stores entities and relations (e.g., *"AuthModule depends on UserService"*).
 - **Memory Bank**: Stores deep context as Markdown (specs, blueprints, post-mortems).
 - **Thought Log**: Captures the *reasoning process* behind decisions, not just the output.
 
 ### 2. Knowledge Lifecycle (The "Ripening" Process)
-- **Maturation**: Frequently accessed knowledge is automatically "ripened" into stable, long-term assets.
-- **Decay**: Stale or transient noise is automatically archived to keep your context high-signal.
+- **Maturation**: Frequently accessed knowledge is automatically "ripened" into stable long-term assets.
+- **Decay & GC**: Stale or transient noise is automatically archived to keep context high-signal.
 
-### 3. Built for Speed & Privacy
-- **Ultra-Low Latency**: SQLite + FAISS architecture ensures search results in **< 20ms**.
-- **Local-First**: Your proprietary design decisions stay on your machine. Ships with `fastembed` for 100% local vectorization.
-- **Human-in-the-Loop**: Contradiction detection alerts you if an AI tries to save something that conflicts with existing knowledge.
+### 3. Zero-Config by Design
+- LLM not configured? Core search, graph, and Memory Bank still work fully.
+- Config priority: `Environment Variable` > `~/.ripen/config.json` > Defaults.
+- Hub startup prints a summary of active services and the **Client Connection URL**.
 
-### 4. Professional CLI Tools
-- `ripen-init`: Interactive setup wizard for LLMs and directories.
-- `ripen-register`: Automatic cross-platform discovery and registration for IDEs.
-- `ripen-admin`: Powerful CLI for knowledge maintenance and GC.
+### 4. Professional CLI
+| Command | Role |
+|---------|------|
+| `ripen --sse` | Start the Hub server |
+| `ripen-init` | Interactive wizard (Hub or Client mode) |
+| `ripen-register --hub-url <url>` | Register any IDE to a remote Hub |
+| `ripen-admin` | Knowledge maintenance and GC |
+
+### 5. Observability Dashboard
+Visit `http://localhost:8377/dashboard` to see:
+- **Active Agents**: Which IDEs/tools are currently connected
+- **Knowledge Flow**: Real-time activity timeline
+- **Hub Status**: Transport mode and configuration
 
 ---
 
@@ -95,40 +144,53 @@ graph LR
 
 ---
 
-## Installation Options
+## Installation
 
-### Option A: Standard (Recommended)
-Use `uv` for the best experience:
+### Option A: Zero-install (Recommended)
+```bash
+uvx ripen --sse        # Hub
+uvx ripen-init         # Setup wizard
+```
+
+### Option B: Persistent install
 ```bash
 pip install ripen
 ripen-init
 ```
 
-### Option B: Docker (For Team Hubs)
+### Option C: Docker (Team Hub)
 ```bash
-docker run -d -p 8377:8377 -v ripen_data:/data ayato-labs/ripen
+docker run -d -p 8377:8377 -v ripen_data:/data ghcr.io/ayato-labs/ripen
 ```
 
-### Option C: Native Binary
-Download `ripen.exe` from [GitHub Releases](https://github.com/ayato-labs/ripen/releases).
+### Option D: Native Binary
+Download from [GitHub Releases](https://github.com/ayato-labs/ripen/releases) — no Python required.
 
 ---
 
 ## 🇯🇵 日本語
 
-### AI駆動開発が速くなりすぎて、「情報共有」が壊れていませんか？
+### 他のMCPメモリサーバーとの根本的な違い
 
-AI駆動開発によって開発速度は圧倒的に向上しました。しかし、Cursor、Claude Code、Gemini CLI といった複数のツールを併用すると、AIごとの「常識のズレ」が深刻な問題になります。
+一般的なMCPメモリサーバーは `stdio` モードで動作し、**1つのIDEと1つのサーバー**が1:1で接続されます。知識はそのIDEの中に閉じています。
 
-**Ripen** は、すべてのAIツールが同じ「黒板（ブラックボード）」を読み書きできる、ローカルファーストの共有メモリサーバーです。一度教えた設計思想や技術決定をAIが忘れない場所に置くことで、エージェントを「チームの一員」として機能させます。
+**Ripenは `SSEハブ` として動作します。** HTTPサーバーとして常駐し、複数のIDE・複数のメンバーが同時に読み書きできます。Aさんの Cursor が保存した設計決定を、Bさんの Claude Code が即座に参照できます。
 
-詳細は [概念的要件定義書](docs/概念的要件定義書.md) をご覧ください。
+これが**唯一の根本的な差別化ポイント**です。「AIチームの共有黒板」。
+
+### セットアップ
+
+**親機（Hub）側**: `ripen-init` → `hub` を選択 → 設定完了後に「接続URL」が表示される
+
+**子機（Client）側**: `ripen-init` → `client` を選択 → Hub の URL を入力 → 全IDEに自動登録完了
+
+詳細は [概念的要件定義書](docs/概念的要件定義書.md) · [配信計画](docs/配信計画.md) · [アーキテクチャ](docs/アーキテクチャ.md) をご覧ください。
 
 ---
 
 ## License & Governance
 
 - **Open Source**: [AGPL-3.0](LICENSE) — free for personal and open-source use.
-- **Commercial**: For proprietary integrations, a [Commercial License](COMMERCIAL.md) is available.
+- **Commercial**: For proprietary team integrations, a [Commercial License](COMMERCIAL.md) is available.
 
 *Ripen: Making AI agents remember what your team already decided.*
