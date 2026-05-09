@@ -1,11 +1,9 @@
 import hashlib
 import json
-import os
-import time
 from typing import Any
 
 from shared_memory.common.config import settings
-from shared_memory.common.utils import get_logger
+from shared_memory.common.utils import get_logger, normalize_text
 from shared_memory.core.ai_control import AIRateLimiter, retry_on_ai_quota
 from shared_memory.infra.database import async_get_connection, retry_on_db_lock
 
@@ -20,6 +18,7 @@ def get_fastembed_model():
     if _fastembed_model is None:
         try:
             from fastembed import TextEmbedding
+
             logger.info(f"Initializing FastEmbed with model: {settings.embedding_model}")
             _fastembed_model = TextEmbedding(model_name=settings.embedding_model)
         except ImportError:
@@ -33,6 +32,7 @@ def get_gemini_client():
     Returns a Gemini API client using the key from config or environment.
     """
     from google import genai
+
     api_key = settings.api_key
     if not api_key:
         return None
@@ -57,11 +57,12 @@ async def compute_embedding(
     is_single = isinstance(text_list, str)
     items = [text_list] if is_single else text_list
 
-    # 1. Filter out empty strings
+    # 1. Normalize and filter
     valid_entries = []
-    for i, txt in enumerate(items):
-        if txt and txt.strip():
-            valid_entries.append((i, txt[:10000]))
+    for i, raw_txt in enumerate(items):
+        clean_txt = normalize_text(raw_txt)
+        if clean_txt:
+            valid_entries.append((i, clean_txt))
 
     if not valid_entries:
         # Return dummy vectors if no text
@@ -75,8 +76,8 @@ async def compute_embedding(
     compute_map = []
 
     # Cache key includes model name to prevent collisions between different engines
-    engine_prefix = settings.embedding_engine
     model_name = settings.embedding_model
+    logger.debug(f"Checking cache for {len(valid_entries)} entries using model {model_name}")
 
     async def _process_cache(db):
         for original_idx, txt in valid_entries:
@@ -99,13 +100,13 @@ async def compute_embedding(
             await _process_cache(db)
 
     if not to_compute:
-        logger.info(f"All {len(items)} embeddings retrieved from CACHE.")
+        logger.info(f"All {len(items)} embeddings retrieved from CACHE (SHA-256).")
         dim = 384 if settings.embedding_engine == "fastembed" else 768
         final_results = [r if r is not None else ([0.0] * dim) for r in results]
         return final_results[0] if is_single else final_results
 
     logger.info(f"Cache miss: computing {len(to_compute)} new embeddings...")
-    
+
     # 2. Compute via chosen engine
     computed_vectors = []
     if settings.embedding_engine == "fastembed":
@@ -119,7 +120,7 @@ async def compute_embedding(
         client = get_gemini_client()
         if not client:
             raise ValueError("Gemini engine selected but API key is missing.")
-        
+
         await AIRateLimiter.throttle(task_type="embedding")
         response = await client.aio.models.embed_content(
             model=model_name,
@@ -156,5 +157,5 @@ async def compute_embedding(
 
 
 def _get_text_hash(text: str) -> str:
-    """Returns MD5 hash of the text for caching."""
-    return hashlib.md5(text.encode("utf-8")).hexdigest()
+    """Returns SHA-256 hash of the text for robust caching."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()

@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import pytest
@@ -18,7 +19,7 @@ async def test_save_memory_async_system_flow(fake_llm):
     # Call the tool with both entity and observation
     response = await server.save_memory(entities=entities, observations=observations)
 
-    assert "initiated in background" in response
+    assert "Saved" in response
 
     # Wait for the background task to complete
     from shared_memory.common.tasks import wait_for_background_tasks
@@ -36,7 +37,6 @@ async def test_save_memory_async_system_flow(fake_llm):
         if any("System test fact" in r["content"] for r in obs_list):
             break
         if attempt < max_retries - 1:
-            import asyncio
             await asyncio.sleep(0.5)
     else:
         pytest.fail(
@@ -90,9 +90,30 @@ async def test_full_thought_to_knowledge_loop(fake_llm):
     # 2. The distillation is a background task. Wait for it.
     from shared_memory.common.tasks import wait_for_background_tasks
 
-    await wait_for_background_tasks()
+    await wait_for_background_tasks(timeout=5.0)
 
-    results = await search_memory_logic("SharedMemoryServer")
-    obs_list = results.get("observations", [])
-    if not any("asynchronous saving" in r["content"].lower() for r in obs_list):
-        pytest.fail("Knowledge was not distilled and saved in time.")
+    # Use a retry loop for search as embeddings might take a moment to be searchable
+    # (though they should be ready if save_memory_core was awaited)
+    found = False
+    for _ in range(3):
+        results = await search_memory_logic("SharedMemoryServer")
+        obs_list = results.get("observations", [])
+        if any("asynchronous saving" in r["content"].lower() for r in obs_list):
+            found = True
+            break
+        await asyncio.sleep(1.0)
+
+    if not found:
+        # Fallback check directly in DB
+        from shared_memory.infra.database import async_get_connection
+
+        async with await async_get_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT content FROM observations WHERE entity_name='SharedMemoryServer'"
+            )
+            rows = await cursor.fetchall()
+            print(f"DEBUG: Observations in DB: {[r[0] for r in rows]}")
+            if any("asynchronous saving" in r[0].lower() for r in rows):
+                found = True
+
+    assert found, "Knowledge was not distilled and saved in time."

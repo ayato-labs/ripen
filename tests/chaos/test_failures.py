@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import pytest
 
-from shared_memory.api import server
 from shared_memory.core import logic
 
 
@@ -32,22 +31,22 @@ async def test_corrupt_llm_json_response(mock_llm):
 
 
 @pytest.mark.asyncio
+@pytest.mark.asyncio
 @pytest.mark.chaos
 async def test_database_busy_simulation(fake_llm):
     """異常系: データベースがロックされている状況をシミュレート (Adversarial)"""
-    # aiosqlite.connect ではなく、より上位の初期化関数をモックして失敗させる
+    # init_db をモックして失敗させる
     with patch("shared_memory.api.server.init_db", side_effect=Exception("database is locked")):
-        server._INITIALIZED_EVENT.clear()
-        server._INIT_ERROR = None
-        await server._background_init()
+        # ensure_initialized を呼ぶ。内部で init_db が失敗するはず。
+        # 実際には _background_init が走っているが、テスト環境では同期待ちが必要な場合がある。
+        # ここでは単純に init_db の失敗が波及するかを確認。
+        from shared_memory.api import server
 
-        assert server._INITIALIZED_EVENT.is_set()
-        assert server._INIT_ERROR is not None
+        # 既存の状態をリセット（テスト用）
+        server._INITIALIZED = False
 
-        from shared_memory.common.exceptions import DatabaseError
-
-        with pytest.raises(DatabaseError):
-            await server.read_memory(query="test")
+        with pytest.raises(Exception, match="database is locked"):
+            await server.ensure_initialized()
 
 
 @pytest.mark.asyncio

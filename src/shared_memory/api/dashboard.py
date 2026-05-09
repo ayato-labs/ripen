@@ -1,7 +1,8 @@
-import json
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, Router
+
 from shared_memory.ops import management
+
 
 async def get_dashboard_html(request):
     html_content = """
@@ -252,7 +253,7 @@ async def get_dashboard_html(request):
 
     <script>
         function fetchHistory() {
-            fetch('/api/history')
+            fetch('api/history')
                 .then(res => res.json())
                 .then(data => {
                     const timeline = document.getElementById('timeline');
@@ -270,7 +271,7 @@ async def get_dashboard_html(request):
         }
 
         function fetchConflicts() {
-            fetch('/api/conflicts')
+            fetch('api/conflicts')
                 .then(res => res.json())
                 .then(data => {
                     const list = document.getElementById('conflicts-list');
@@ -298,7 +299,7 @@ async def get_dashboard_html(request):
         }
 
         function resolve(id, action) {
-            fetch('/api/conflicts/' + id + '/resolve?action=' + action, { method: 'POST' })
+            fetch('api/conflicts/' + id + '/resolve?action=' + action, { method: 'POST' })
                 .then(res => {
                     if (res.ok) {
                         fetchConflicts();
@@ -317,14 +318,17 @@ async def get_dashboard_html(request):
 """
     return HTMLResponse(content=html_content)
 
+
 async def api_history(request):
     limit = int(request.query_params.get("limit", 20))
     history = await management.get_audit_history_logic(limit=limit)
     return JSONResponse(history)
 
+
 async def api_conflicts(request):
     conflicts = await management.get_unresolved_conflicts_logic()
     return JSONResponse(conflicts)
+
 
 async def api_resolve_conflict(request):
     conflict_id = int(request.path_params.get("id"))
@@ -332,9 +336,12 @@ async def api_resolve_conflict(request):
     result = await management.resolve_conflict_logic(conflict_id, action)
     return JSONResponse({"status": "success", "message": result})
 
-router = Router([
-    Route("/history", get_dashboard_html, methods=["GET"]),
-    Route("/api/history", api_history, methods=["GET"]),
-    Route("/api/conflicts", api_conflicts, methods=["GET"]),
-    Route("/api/conflicts/{id:int}/resolve", api_resolve_conflict, methods=["POST"]),
-])
+
+router = Router(
+    [
+        Route("/history", get_dashboard_html, methods=["GET"]),
+        Route("/api/history", api_history, methods=["GET"]),
+        Route("/api/conflicts", api_conflicts, methods=["GET"]),
+        Route("/api/conflicts/{id:int}/resolve", api_resolve_conflict, methods=["POST"]),
+    ]
+)

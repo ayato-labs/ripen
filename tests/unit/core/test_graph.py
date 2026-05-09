@@ -42,8 +42,13 @@ async def test_check_conflict_isolated(fake_llm_client):
         )
         await conn.commit()
 
-    # Mocking both sync and async client getters
-    with patch("shared_memory.core.graph.get_gemini_client", return_value=fake_llm_client):
+    # Mocking the provider
+    class FakeProvider:
+        async def generate_content(self, prompt, system_instruction=None):
+            resp = fake_llm_client.models.generate_content(model="fake", contents=prompt)
+            return resp.text
+
+    with patch("shared_memory.core.graph.get_llm_provider", return_value=FakeProvider()):
         # Case 1: No conflict (FakeClient default)
         conflicts = await graph.check_conflict("Static", ["New info"], "test_agent")
         assert conflicts[0][0] is False

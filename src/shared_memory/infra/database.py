@@ -25,6 +25,7 @@ def _get_init_lock() -> asyncio.Lock:
         _INIT_LOCK = asyncio.Lock()
     return _INIT_LOCK
 
+
 # Global semaphores mapped by event loop to limit concurrent DB writes
 _WRITE_SEMAPHORES: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
 
@@ -99,9 +100,13 @@ class AsyncSQLiteConnection:
                         logger.info(f"Establishing NEW thoughts singleton: {self.db_path}")
                         _THOUGHTS_CONNECTION = await aiosqlite.connect(self.db_path, timeout=30.0)
                         _THOUGHTS_CONNECTION.row_factory = aiosqlite.Row
+                        # --- MATURE TECH OPTIMIZATIONS ---
                         await _THOUGHTS_CONNECTION.execute("PRAGMA journal_mode = WAL")
                         await _THOUGHTS_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-                        logger.info("Thoughts connection PRAGMAs configured (WAL/NORMAL).")
+                        await _THOUGHTS_CONNECTION.execute("PRAGMA mmap_size = 268435456")  # 256MB
+                        await _THOUGHTS_CONNECTION.execute("PRAGMA temp_store = MEMORY")
+                        await _THOUGHTS_CONNECTION.execute("PRAGMA busy_timeout = 5000")
+                        logger.info("Thoughts connection PRAGMAs configured (WAL/NORMAL/MMAP).")
                     self.conn = _THOUGHTS_CONNECTION
                 else:
                     if _MAIN_CONNECTION is None:
@@ -109,10 +114,14 @@ class AsyncSQLiteConnection:
                         try:
                             _MAIN_CONNECTION = await aiosqlite.connect(self.db_path, timeout=30.0)
                             _MAIN_CONNECTION.row_factory = aiosqlite.Row
+                            # --- MATURE TECH OPTIMIZATIONS ---
                             await _MAIN_CONNECTION.execute("PRAGMA foreign_keys = ON")
                             await _MAIN_CONNECTION.execute("PRAGMA journal_mode = WAL")
                             await _MAIN_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-                            await _MAIN_CONNECTION.execute("PRAGMA cache_size = -2000")
+                            await _MAIN_CONNECTION.execute("PRAGMA mmap_size = 268435456")  # 256MB
+                            await _MAIN_CONNECTION.execute("PRAGMA temp_store = MEMORY")
+                            await _MAIN_CONNECTION.execute("PRAGMA busy_timeout = 5000")
+                            await _MAIN_CONNECTION.execute("PRAGMA cache_size = -64000")  # ~64MB
                             logger.info("Main connection successfully established and configured.")
                         except Exception:
                             logger.exception("CRITICAL: Failed to establish main DB connection")
@@ -128,12 +137,13 @@ class AsyncSQLiteConnection:
             raise DatabaseError(f"Database connection failed: {e}") from e
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if exc_type:
+        if exc_type and not isinstance(exc_val, asyncio.CancelledError):
             logger.error(
                 f"Exception detected in AsyncSQLiteConnection context for {self.db_path}: "
                 f"{exc_type.__name__}: {exc_val}"
             )
         # We don't close the connection here as it's a managed singleton
+        return False
 
     def __await__(self):
         async def _internal():

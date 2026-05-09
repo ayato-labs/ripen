@@ -16,6 +16,7 @@ DEFAULT_LLM_PROVIDER = "ollama"
 
 # Gemini Settings (Optional)
 GOOGLE_AI_MODELS = ["gemma-4-31b-it", "gemma-4-26b-a4b-it"]
+GOOGLE_COMPRESSION_MODELS = ["gemma-4-31b-it", "gemma-4-26b-a4b-it"]
 GOOGLE_EMBEDDING_MODEL = "models/gemini-embedding-001"
 
 # Ollama Settings (Local host)
