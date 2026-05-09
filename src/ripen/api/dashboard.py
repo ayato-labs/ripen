@@ -11,7 +11,7 @@ async def get_dashboard_html(request):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SharedMemory Dashboard | Transparency & Trust</title>
+    <title>Ripen Dashboard | Knowledge Infrastructure</title>
     <link 
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Inter:wght@300;400;600&display=swap" 
         rel="stylesheet">
@@ -20,7 +20,7 @@ async def get_dashboard_html(request):
             --bg-color: #0a0c10;
             --glass-bg: rgba(255, 255, 255, 0.03);
             --glass-border: rgba(255, 255, 255, 0.1);
-            --accent-primary: #4f46e5;
+            --accent-primary: #6366f1;
             --accent-secondary: #06b6d4;
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
@@ -68,18 +68,37 @@ async def get_dashboard_html(request):
         .logo {
             font-size: 1.5rem;
             font-weight: 600;
+            letter-spacing: -0.02em;
             background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
         .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             padding: 0.5rem 1rem;
             border-radius: 999px;
             background: rgba(16, 185, 129, 0.1);
             color: var(--success);
             font-size: 0.875rem;
+            font-weight: 600;
             border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
         .grid {
@@ -95,7 +114,7 @@ async def get_dashboard_html(request):
             border-radius: 24px;
             padding: 2rem;
             margin-bottom: 2rem;
-            transition: transform 0.3s ease;
+            transition: all 0.3s ease;
         }
 
         .card:hover {
@@ -103,11 +122,15 @@ async def get_dashboard_html(request):
         }
 
         .section-title {
-            font-size: 1.25rem;
+            font-size: 1.1rem;
+            font-weight: 600;
             margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .section-title::before {
@@ -153,8 +176,8 @@ async def get_dashboard_html(request):
 
         .timeline-content {
             background: rgba(255, 255, 255, 0.02);
-            padding: 1rem;
-            border-radius: 12px;
+            padding: 1.25rem;
+            border-radius: 16px;
             border: 1px solid var(--glass-border);
         }
 
@@ -166,80 +189,34 @@ async def get_dashboard_html(request):
             font-size: 0.75rem; 
             margin-right: 0.5rem; 
         }
-        .agent-name { color: var(--text-secondary); font-size: 0.875rem; }
+        .agent-name { color: var(--text-primary); font-size: 0.875rem; font-weight: 500; }
 
-        /* Conflict Items */
-        .conflict-item {
-            background: rgba(245, 158, 11, 0.05);
-            border: 1px solid rgba(245, 158, 11, 0.2);
-            border-radius: 16px;
-            padding: 1.25rem;
-            margin-bottom: 1rem;
+        /* Agent List */
+        .agent-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
         }
 
-        .conflict-meta { 
-            font-size: 0.875rem; 
-            margin-bottom: 1rem; 
-            display: flex; 
-            justify-content: space-between; 
-        }
-        .conflict-reason { 
-            color: var(--warning); 
-            font-size: 0.875rem; 
-            margin-bottom: 1rem; 
-            font-style: italic; 
-        }
-
-        .diff-container {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .diff-box {
-            padding: 0.75rem;
-            border-radius: 8px;
+        .agent-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
             font-size: 0.875rem;
-            overflow-x: auto;
-            white-space: pre-wrap;
         }
 
-        .old { 
-            background: rgba(239, 68, 68, 0.1); 
-            border: 1px solid rgba(239, 68, 68, 0.2); 
-            color: #fecaca; 
-        }
-        .new { 
-            background: rgba(16, 185, 129, 0.1); 
-            border: 1px solid rgba(16, 185, 129, 0.2); 
-            color: #a7f3d0; 
+        .agent-icon {
+            width: 10px;
+            height: 10px;
+            background: var(--success);
+            border-radius: 50%;
         }
 
-        .btn-group { display: flex; gap: 0.5rem; }
-        button {
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .btn-approve { background: var(--success); color: white; }
-        .btn-approve:hover { filter: brightness(1.1); transform: translateY(-1px); }
-        .btn-reject { 
-            background: transparent; 
-            border: 1px solid var(--glass-border); 
-            color: var(--text-secondary); 
-        }
-        .btn-reject:hover { 
-            background: rgba(239, 68, 68, 0.1); 
-            color: var(--danger); 
-            border-color: var(--danger); 
-        }
-
-        .empty-state { text-align: center; color: var(--text-secondary); padding: 2rem; }
+        .empty-state { text-align: center; color: var(--text-secondary); padding: 2rem; font-size: 0.875rem; }
 
         @media (max-width: 900px) {
             .grid { grid-template-columns: 1fr; }
@@ -249,37 +226,42 @@ async def get_dashboard_html(request):
 <body>
     <div class="container">
         <header>
-            <div class="logo">SharedMemory Dashboard</div>
-            <div class="status-badge">Active Systems</div>
+            <div class="logo">RIPEN HUB</div>
+            <div class="status-badge">
+                <div class="pulse"></div>
+                SYSTEM ONLINE
+            </div>
         </header>
 
         <div class="grid">
             <main>
                 <div class="card">
-                    <h2 class="section-title">Conflict Center</h2>
-                    <div id="conflicts-list">
-                        <div class="empty-state">Loading pending conflicts...</div>
+                    <h2 class="section-title">Knowledge Flow</h2>
+                    <div id="timeline" class="timeline">
+                        <div class="empty-state">Loading timeline...</div>
                     </div>
-                </div>
-
-                <div class="card">
-                    <h2 class="section-title">Activity Timeline</h2>
-                    <div id="timeline" class="timeline"></div>
                 </div>
             </main>
 
             <aside>
                 <div class="card">
-                    <h2 class="section-title">System Insights</h2>
-                    <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;">
-                        Trust is built through transparency. This dashboard allows you 
-                        to audit the "Blackboard" of your team's AI agents.
-                    </p>
+                    <h2 class="section-title">Active Agents</h2>
+                    <div id="agents" class="agent-list">
+                        <div class="empty-state">No active agents detected.</div>
+                    </div>
                 </div>
+
                 <div class="card">
-                    <h3 style="font-size: 1rem; margin-bottom: 1rem;">Stats</h3>
-                    <div id="stats" style="font-size: 0.875rem; color: var(--text-secondary);">
-                        Fetching metrics...
+                    <h2 class="section-title">Hub Status</h2>
+                    <div id="stats" style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.8;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Role:</span>
+                            <span style="color: var(--text-primary); font-weight: 600;">Central Hub</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>Transport:</span>
+                            <span style="color: var(--accent-secondary);">SSE (Shared)</span>
+                        </div>
                     </div>
                 </div>
             </aside>
@@ -287,79 +269,55 @@ async def get_dashboard_html(request):
     </div>
 
     <script>
-        function fetchHistory() {
+        function updateDashboard() {
             fetch('api/history')
                 .then(res => res.json())
                 .then(data => {
+                    // Update Timeline
                     const timeline = document.getElementById('timeline');
-                    timeline.innerHTML = data.map(item => 
-                        '<div class="timeline-item">' +
-                        '<div class="time">' + item.timestamp + '</div>' +
-                        '<div class="timeline-content">' +
-                        '<span class="action">' + item.action + '</span>' +
-                        '<span style="font-weight: 500;">' + item.cid + '</span>' +
-                        '<span class="agent-name">by ' + item.agent + '</span>' +
-                        '<div style="font-size: 0.75rem; color: var(--text-secondary); ' + 
-                        'margin-top: 0.5rem;">Table: ' + item.table + '</div>' +
-                        '</div></div>'
-                    ).join('');
-                });
-        }
-
-        function fetchConflicts() {
-            fetch('api/conflicts')
-                .then(res => res.json())
-                .then(data => {
-                    const list = document.getElementById('conflicts-list');
                     if (data.length === 0) {
-                        list.innerHTML = 
-                            '<div class="empty-state">' + 
-                            'No pending conflicts. All knowledge is synchronized.</div>';
-                        return;
+                        timeline.innerHTML = '<div class="empty-state">No activity yet.</div>';
+                    } else {
+                        timeline.innerHTML = data.map(item => `
+                            <div class="timeline-item">
+                                <div class="time">${item.timestamp}</div>
+                                <div class="timeline-content">
+                                    <span class="action">${item.action}</span>
+                                    <span style="font-weight: 500;">${item.cid}</span>
+                                    <span class="agent-name">by ${item.agent}</span>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                                        ${item.table}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
                     }
-                    list.innerHTML = data.map(c => 
-                        '<div class="conflict-item">' +
-                        '<div class="conflict-meta">' +
-                        '<span style="font-weight: 600;">Entity: ' + c.entity + '</span>' +
-                        '<span class="agent-name">Proposed by ' + c.agent + '</span>' +
-                        '</div>' +
-                        '<div class="conflict-reason">Contradiction: ' + c.reason + '</div>' +
-                        '<div class="diff-container">' +
-                        '<div class="diff-box old"><strong>EXISTING:</strong><br>' + 
-                            c.existing + '</div>' +
-                        '<div class="diff-box new"><strong>PROPOSED:</strong><br>' + 
-                            c.proposed + '</div>' +
-                        '</div>' +
-                        '<div class="btn-group">' +
-                        '<button class="btn-approve" onclick="resolve(' + c.id + 
-                            ', \\'approve\\')">Approve & Merge</button>' +
-                        '<button class="btn-reject" onclick="resolve(' + c.id + 
-                            ', \\'reject\\')">Reject</button>' +
-                        '</div></div>'
-                    ).join('');
-                });
-        }
 
-        function resolve(id, action) {
-            fetch('api/conflicts/' + id + '/resolve?action=' + action, { method: 'POST' })
-                .then(res => {
-                    if (res.ok) {
-                        fetchConflicts();
-                        fetchHistory();
+                    // Update Active Agents
+                    const agentsList = document.getElementById('agents');
+                    const agents = [...new Set(data.map(item => item.agent))];
+                    
+                    if (agents.length === 0) {
+                        agentsList.innerHTML = '<div class="empty-state">No active agents.</div>';
+                    } else {
+                        agentsList.innerHTML = agents.map(name => `
+                            <div class="agent-pill">
+                                <div class="agent-icon"></div>
+                                <span>${name}</span>
+                                <span style="margin-left: auto; font-size: 0.7rem; color: var(--success); opacity: 0.7;">ACTIVE</span>
+                            </div>
+                        `).join('');
                     }
                 });
         }
 
-        fetchHistory();
-        fetchConflicts();
-        setInterval(fetchHistory, 5000);
-        setInterval(fetchConflicts, 5000);
+        updateDashboard();
+        setInterval(updateDashboard, 5000);
     </script>
 </body>
 </html>
 """
     return HTMLResponse(content=html_content)
-
 
 async def api_history(request):
     limit = int(request.query_params.get("limit", 20))
@@ -381,7 +339,7 @@ async def api_resolve_conflict(request):
 
 router = Router(
     [
-        Route("/history", get_dashboard_html, methods=["GET"]),
+        Route("/dashboard", get_dashboard_html, methods=["GET"]),
         Route("/api/history", api_history, methods=["GET"]),
         Route("/api/conflicts", api_conflicts, methods=["GET"]),
         Route("/api/conflicts/{id:int}/resolve", api_resolve_conflict, methods=["POST"]),

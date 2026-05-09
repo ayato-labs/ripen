@@ -48,9 +48,30 @@ def main():
     clear_screen()
     print_banner()
     
-    config = {}
-    
     print("Welcome to Ripen! Let's get your brain infrastructure set up.")
+    
+    mode = ask_question("Select installation mode:", 
+                        default="hub", 
+                        options=["hub", "client"])
+    
+    if mode.lower() == "client":
+        # --- CLIENT MODE ---
+        print("\n\033[1;33m--- Client Mode (Connect to a shared Hub) ---\033[0m")
+        hub_url = ask_question("Enter the Ripen Hub URL (e.g., http://192.168.1.10:8377):", 
+                              default="http://localhost:8377")
+        
+        print(f"\nRegistering with Hub at {hub_url}...")
+        try:
+            from ripen.cli.register import register_mcp
+            register_mcp(hub_url=hub_url)
+            print("\n\033[1;32m🎉 Client setup complete! Ripen Hub is now connected to your IDEs.\033[0m")
+        except Exception as e:
+            print(f"\n\033[1;31m! Registration failed: {e}\033[0m")
+        return
+
+    # --- HUB MODE (Original) ---
+    print("\n\033[1;33m--- Hub Mode (Setting up a local knowledge server) ---\033[0m")
+    config = {}
     
     # 1. Base Directory
     default_home = Path.home() / ".ripen"
@@ -67,18 +88,17 @@ def main():
     if provider.lower() == "gemini":
         api_key = ask_question("Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):")
         config["google_api_key"] = api_key
-        # Test key (basic validation)
         if len(api_key) < 20:
-             print("\033[1;31m! Warning: That API key looks a bit short. Please double check later.\033[0m")
+             print("\033[1;31m! Warning: That API key looks a bit short.\033[0m")
     
     elif provider.lower() == "ollama":
         config["ollama_base_url"] = ask_question("Ollama API URL?", default="http://localhost:11434")
         config["ollama_model"] = ask_question("Ollama Model?", default="llama3.1")
-        print("\n\033[1;33mNote:\033[0m Make sure Ollama is running and the model is pulled (`ollama pull llama3.1`)!")
+        print("\n\033[1;33mNote:\033[0m Make sure Ollama is running (`ollama serve`)!")
 
     # 3. Transport Mode
     print("\n\033[1;33mStep 3: Transport Mode\033[0m")
-    transport = ask_question("Default transport mode?", default="stdio", options=["stdio", "sse"])
+    transport = ask_question("Default transport mode?", default="sse", options=["stdio", "sse"])
     config["default_transport"] = transport.lower()
     
     if transport.lower() == "sse":
@@ -96,26 +116,32 @@ def main():
     
     # 5. IDE Registration
     print("\n\033[1;33mStep 4: IDE Registration\033[0m")
-    register = ask_question("Would you like to register Ripen with your IDEs now?", default="y", options=["y", "n"])
+    register = ask_question("Would you like to register this Hub with your local IDEs?", default="y", options=["y", "n"])
     
     if register.lower() == "y":
         try:
-            from ripen.cli.register import main as register_main
-            print("\nSearching for IDEs...")
-            # We need to simulate sys.argv or just call it
-            register_main()
+            from ripen.cli.register import register_mcp
+            register_mcp(transport=config["default_transport"], port=config.get("sse_port", 8377))
         except Exception as e:
             print(f"\033[1;31m! Failed to auto-register: {e}\033[0m")
     
     print("\n" + "="*40)
-    print("\033[1;32m🎉 Setup Complete!\033[0m")
-    print("\nTo start your memory server:")
+    print("\033[1;32m🎉 Hub Setup Complete!\033[0m")
+    print("\nTo start your Hub server:")
     if config["default_transport"] == "sse":
         print(f"  \033[1;36mripen --sse --port {config.get('sse_port', 8377)}\033[0m")
     else:
         print(f"  \033[1;36mripen\033[0m")
     
-    print(f"\nDashboard is available at: \033[1;34mhttp://localhost:{config.get('sse_port', 8377)}/dashboard\033[0m (SSE mode only)")
+    if config["default_transport"] == "sse":
+        import socket
+        hostname = socket.gethostname()
+        try:
+            local_ip = socket.gethostbyname(hostname)
+        except:
+            local_ip = "YOUR_IP"
+        print(f"\nClient Connection URL: \033[1;33mhttp://{local_ip}:{config.get('sse_port', 8377)}\033[0m")
+        print(f"Dashboard: \033[1;35mhttp://localhost:{config.get('sse_port', 8377)}/dashboard\033[0m")
     print("="*40)
 
 if __name__ == "__main__":
