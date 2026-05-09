@@ -161,24 +161,47 @@ async def save_memory(
     bank_files: dict | None = None,
     agent_id: str | None = None,
 ) -> str:
+    """
+    The gateway to your long-term memory. Use this to persist high-signal information, 
+    verified architectural decisions, and stable domain knowledge. 
+    Focus on structured 'entities' and 'relations' to build a permanent 'Single Source of Truth'.
+    This knowledge will be used for 'salvage' (retrieval) in future sessions to maintain consistency.
+    """
     user = agent_id or get_current_user() or "default_agent"
     return await logic_module.save_memory_core(entities, relations, observations, bank_files, user)
 
 
 @mcp.tool()
 async def read_memory(query: str | None = None) -> str:
+    """
+    A hybrid semantic/full-text search interface to your external hippocampus. 
+    Use this at the beginning of any task to 'salvage' relevant past context and avoid reinventing the wheel. 
+    The results provide high-level summaries and IDs; use 'synthesize_entity' if you need the full context 
+    of a specific subject. This helps you maintain the 'State' of the project beyond your current context window.
+    """
     results = await logic_module.read_memory_core(query)
     return json.dumps(results, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
 async def synthesize_entity(entity_name: str) -> str:
+    """
+    Synthesize all available knowledge about a specific entity into a comprehensive summary. 
+    Use this when 'read_memory' provides an ID or name you need to investigate in depth. 
+    It aggregates observations, relations, and metadata to give you the complete picture 
+    of that entity's current state in the knowledge base.
+    """
     summary = await logic_module.synthesize_entity(entity_name)
     return json.dumps(summary, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
 async def get_graph_data(query: str | None = None) -> str:
+    """
+    Retrieve the structural relationships (graph) of knowledge. 
+    Use this to understand dependencies, hierarchical connections, and how different entities relate to each other. 
+    This is crucial for maintaining architectural integrity and identifying systemic impacts of changes.
+    """
     data = await graph_module.get_graph_data(query)
     return json.dumps(data, indent=2, ensure_ascii=False)
 
@@ -195,6 +218,15 @@ async def sequential_thinking(
     is_revision: bool | None = None,
     revises_thought: int | None = None,
 ) -> str:
+    """
+    An advanced reasoning tool to externalize and govern your inference process. 
+    Use this as your primary cognitive workspace to break down complex problems, track hypotheses, 
+    and maintain logical consistency across sessions. 
+    Each thought must have a unique 'thought_number' within a session to preserve the chain of reasoning. 
+    Use 'is_revision=True' to correct previous errors or update conclusions (this avoids duplicate errors), 
+    and 'branch_id' to explore alternative paths. 
+    This tool ensures your 'Reasoning Provenance' is auditable and reusable by future agents.
+    """
     user = get_current_user() or "default_agent"
     result = await thought_module.process_thought_core(
         thought=thought,
@@ -213,23 +245,44 @@ async def sequential_thinking(
 
 @mcp.tool()
 async def manage_knowledge_activation(ids: Any, status: str) -> str:
+    """
+    Govern the 'Maturity' and 'Activation' of knowledge. 
+    Use this to manually activate important patterns or archive transient noise. 
+    By managing status ('active'/'inactive'), you help the system reduce noise 
+    and prioritize established architectural patterns.
+    """
     await logic_module.manage_knowledge_activation_core(ids, status)
     return f"Status updated to {status}."
 
 
 @mcp.tool()
 async def list_inactive_knowledge() -> str:
+    """
+    List archived or low-maturity knowledge. 
+    Use this to review what has been filtered out by the system's decay/GC logic 
+    and identify if any critical information needs to be 're-activated'.
+    """
     results = await logic_module.list_inactive_knowledge_core()
     return json.dumps(results, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
 async def get_insights(format: str = "markdown") -> str:
+    """
+    Generate a high-level value report and ROI of the memory system. 
+    Use this to understand the distribution of knowledge, the most active entities, 
+    and the overall health of your Reasoning Provenance.
+    """
     return await logic_module.get_value_report_core(format)
 
 
 @mcp.tool()
 async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False) -> str:
+    """
+    System maintenance: Garbage collection. 
+    Trigger this to purge ancient, unused knowledge and maintain system performance. 
+    This is an administrative task to prevent 'Entropy' from overwhelming the core hippocampus.
+    """
     return await logic_module.admin_run_knowledge_gc_core(age_days, dry_run)
 
 
