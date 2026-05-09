@@ -1,6 +1,6 @@
 ﻿# Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
 
-**Centralized Knowledge Hub for AI-Driven Development. One server. Every tool. Every teammate.**
+**Centralized Knowledge Hub for AI-Driven Development. Designed for Local and Small-Team workflows.**
 
 [![PyPI - Version](https://img.shields.io/pypi/v/ripen)](https://pypi.org/project/ripen/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
@@ -16,9 +16,9 @@ Most MCP memory servers run in `stdio` mode — a 1:1 connection between **one I
 
 **Ripen runs as an SSE Hub** — an HTTP server that accepts **N:1 connections**. Multiple agents, multiple IDEs, multiple teammates on **different machines with different accounts**, all reading and writing to the same shared brain simultaneously.
 
-> **The core innovation that no agent framework can replicate:**
-> Claude Code, Cursor, Antigravity, and Gemini CLI can share knowledge —
-> even if they run on **different PCs under different user accounts**.
+> **Note on Scale**: Ripen is currently optimized for **local multi-agent usage or small teams (2-3 people)**. It uses SQLite + WAL mode under the hood, which provides excellent local concurrency but is not designed for high-throughput network writes from large distributed teams.
+
+> **Privacy Warning**: Ripen uses background processes (`incremental_distill_knowledge`) to organize memory. **If you configure an external LLM (like Gemini or OpenAI), snippets of your codebase and prompts may be sent to these external APIs.** For strict enterprise environments, we strongly recommend using a local LLM via Ollama.
 
 ```
 [Typical MCP Memory]                    [Ripen Hub Mode]

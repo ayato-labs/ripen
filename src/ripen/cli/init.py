@@ -84,6 +84,15 @@ def main():
     config["llm_provider"] = provider.lower()
     
     if provider.lower() == "gemini":
+        print("\n\033[1;31m!!! PRIVACY WARNING !!!\033[0m")
+        print("Using an external LLM like Gemini will send snippets of your codebase and AI agent reasoning")
+        print("to Google's servers for background knowledge distillation. For strict enterprise or confidential")
+        print("environments, we strongly recommend using a local LLM via Ollama instead.")
+        proceed = ask_question("Do you want to proceed with Gemini?", default="y", options=["y", "n"])
+        if proceed.lower() != "y":
+             print("\nPlease run ripen-init again and select 'ollama' or 'none'.")
+             return
+
         api_key = ask_question("Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):")
         config["google_api_key"] = api_key
         if len(api_key) < 20:
