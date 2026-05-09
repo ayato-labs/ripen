@@ -1,15 +1,16 @@
 import asyncio
 import time
 import argparse
+
 from loguru import logger
+
+from shared_memory.common.config import settings
 from shared_memory.infra.embeddings import compute_embedding
 from shared_memory.infra.llm import get_llm_provider
-from shared_memory.common.config import settings
 
 # Optional: RAGAS integration
 try:
-    from ragas import evaluate
-    from ragas.metrics import faithfulness, answer_relevancy, context_recall, context_precision
+    import ragas  # noqa: F401
     RAGAS_AVAILABLE = True
 except ImportError:
     RAGAS_AVAILABLE = False
