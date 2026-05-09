@@ -1,33 +1,46 @@
 # Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
 
-**The Centralized Knowledge Hub for AI-Driven Development Teams**
+**Centralized Knowledge Hub for AI-Driven Development. One memory, every tool.**
 
+[![PyPI - Version](https://img.shields.io/pypi/v/ripen)](https://pypi.org/project/ripen/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
-[![Commercial](https://img.shields.io/badge/Commercial-Available-brightgreen)](COMMERCIAL.md)
 [![Status](https://img.shields.io/badge/Status-Production--Ready-blue)](CHANGELOG.md)
 
 > 🇯🇵 **AIエージェント間の「暗黙知」を解消し、チーム開発における「知識の信頼性」を担保する、中央集権型・ローカルファーストの記憶インフラ。**
 
 ---
 
-## The Problem
+## 🚀 3-Minute Quick Start
 
-AI-driven development made your team 10x faster.
-But **knowledge sharing** didn't keep up.
+The fastest way to give your AI agents a shared memory:
 
-- Cursor knows your coding conventions — but **Claude Code doesn't**.
-- Gemini CLI resolved a critical bug yesterday — but **Cursor forgot by today**.
-- Your team decided on an architecture — but **every AI tool proposes a different one**.
+```bash
+# 1. Run the server (Zero-config, no install required)
+uvx ripen --sse
 
-The faster you ship, the faster your AI tools **diverge**. Design decisions scatter across isolated sessions. Architectural drift becomes invisible until it's too late.
+# 2. In a new terminal, run the setup wizard
+uvx ripen-init
+```
 
-This is **"AI Multi-Personality Disorder"** — and it's the hidden cost of high-velocity AI development.
+**That's it.** The wizard will guide you through LLM setup and automatically register Ripen with **Cursor**, **Claude Desktop**, and more.
 
-## The Solution
+---
 
-**Ripen** is a centralized, local-first MCP server that gives all your AI tools a single shared memory.
+## The Problem: AI "Multi-Personality Disorder"
 
-One server. Every tool reads from it. Every tool writes to it. **Design decisions persist. Context survives. Your team's AI agents finally speak the same language.**
+AI-driven development made your team 10x faster, but your knowledge is now scattered:
+
+- **Isolated Context**: Cursor knows your coding conventions — but **Claude Code doesn't**.
+- **Memory Decay**: Gemini CLI resolved a bug yesterday — but **Cursor forgot it by today**.
+- **Architectural Drift**: Your team decided on a pattern — but **every AI tool proposes a different one**.
+
+The faster you ship, the faster your AI tools **diverge**. Ripen stops this drift by providing a **Single Source of Truth (SSoT)** for every agent in your workflow.
+
+---
+
+## The Solution: A Shared "Brain" for All Agents
+
+**Ripen** is a centralized, local-first MCP server. One server. Every tool reads from it. Every tool writes to it.
 
 ```mermaid
 graph LR
@@ -36,7 +49,7 @@ graph LR
         A2["⌨️ Claude Code"]
         A3["🔧 Gemini CLI"]
     end
-    subgraph "Ripen"
+    subgraph "Ripen Hub"
         M["📋 Shared Blackboard"]
         M --> G["Logic Graph"]
         M --> B["Memory Bank"]
@@ -47,105 +60,57 @@ graph LR
     A3 <-->|MCP| M
 ```
 
-## Why This Works
+---
+
+## Key Features
 
 ### 1. Hybrid Intelligence Store
-| Layer | What it stores | Why it matters |
-|-------|---------------|----------------|
-| **Logic Graph** | Entities & relations (`"Module X depends on Service Y"`) | Preserves logical structure that RAG loses |
-| **Memory Bank** | Deep context as Markdown files | Stores architectural blueprints, post-mortems, specs |
+- **Logic Graph**: Stores entities and relations (e.g., *"Module X depends on Service Y"*).
+- **Memory Bank**: Stores deep context as Markdown (specs, blueprints, post-mortems).
+- **Thought Log**: Captures the *reasoning process* behind decisions, not just the output.
 
-### 2. Knowledge Lifecycle Management
-- **Ripening**: Frequently accessed knowledge is boosted as a long-term asset.
-- **Decay & GC**: Stale noise is automatically archived — your context stays high-signal.
+### 2. Knowledge Lifecycle (The "Ripening" Process)
+- **Maturation**: Frequently accessed knowledge is automatically "ripened" into stable, long-term assets.
+- **Decay**: Stale or transient noise is automatically archived to keep your context high-signal.
 
-### 3. Thought Distillation
-Integrated with **Sequential Thinking**, the server captures *reasoning processes*, not just conclusions.
-- **Salvage**: Past decisions resurface exactly when an agent needs them.
-- **Accretion**: Each session's insights are distilled back into shared memory.
+### 3. Built for Speed & Privacy
+- **Ultra-Low Latency**: SQLite + FAISS architecture ensures search results in **< 20ms**.
+- **Local-First**: Your proprietary design decisions stay on your machine. Ships with `fastembed` for 100% local vectorization.
+- **Human-in-the-Loop**: Contradiction detection alerts you if an AI tries to save something that conflicts with existing knowledge.
 
-### 4. Built for Speed & Privacy
-- **Compute-then-Write**: AI processing runs outside DB transactions → <50ms lock time.
-- **Local-First**: SQLite + FAISS. Your proprietary context never leaves your machine.
-- **Multi-Agent Auth**: Secure your hub with API keys. Track exactly which agent (Cursor, Claude, or Gemini) contributed which piece of knowledge.
-- **Zero Cloud Dependency**: Ships with local `fastembed` — no external API required for core logic.
+### 4. Professional CLI Tools
+- `ripen-init`: Interactive setup wizard for LLMs and directories.
+- `ripen-register`: Automatic cross-platform discovery and registration for IDEs.
+- `ripen-admin`: Powerful CLI for knowledge maintenance and GC.
 
-### 5. Transparency & Governance (Trust Layer)
-- **Transparency Dashboard**: Real-time audit logs and system health monitoring at `/:port/history`.
-- **Human-in-the-Loop**: Staging contradiction detection. Review and approve AI-suggested knowledge.
-- **Audit Trails**: Every memory save is logged with its author, enabling clear traceability for team-scale AI development.
-- **Usage Guide**: [English](docs/DASHBOARD_USAGE.md) / [日本語](docs/DASHBOARD_USAGE_JA.md)
+---
 
 ## Benchmarks: LongMemEval
-
-We evaluate system performance using the **LongMemEval** suite, comparing Local-first vs. Cloud-based configurations.
 
 | Metric | Local (FastEmbed + Ollama) | Cloud (Gemini 2.0 Flash) |
 | :--- | :---: | :---: |
 | **Search Latency** | **12ms** | 420ms |
 | **Context Recall (RAGAS)** | **0.95** | 0.96 |
-| **Faithfulness (RAGAS)** | **0.92** | 0.98 |
 | **Independence** | **100% Local** | Cloud Dependency |
 
-> [!NOTE]
-> For high-frequency coding sessions, the **Local-first** setup is recommended due to its near-zero latency, allowing AI agents to "think" without waiting for API responses.
+---
 
-## Quick Start
+## Installation Options
 
+### Option A: Standard (Recommended)
+Use `uv` for the best experience:
 ```bash
-# Install
-uv pip install -e .
-
-# Run as a shared hub (SSE mode — recommended for multi-tool setups)
-uv run ripen --sse --port 8377
+pip install ripen
+ripen-init
 ```
 
-Then point your MCP-compatible tools (Cursor, Claude Code, Gemini CLI) at `http://localhost:8377`.
-
-### LLM Setup (Required for Distillation)
-
-To enable knowledge distillation and automated insights, you need at least one LLM provider configured:
-
-- **Option A: Google Gemini (Recommended)**
-  - Set the `GOOGLE_API_KEY` environment variable.
-  - The server will automatically detect and use Gemini if the key is present.
-
-- **Option B: Local Ollama**
-  - Install [Ollama](https://ollama.com/).
-  - Run the following command to download the required model:
-    ```bash
-    ollama pull llama3.1
-    ```
-  - Ensure Ollama is running (`ollama serve`) before starting the server.
-
-If neither is configured, core graph operations will still work, but **automated knowledge extraction from thoughts will be disabled**.
-
-### Authentication Setup
-
-To enable secure multi-agent access:
-1. Create `data/auth.json` with your credentials:
-```json
-{
-  "cursor_user": "your-secret-key-1",
-  "gemini_agent": "your-secret-key-2"
-}
-```
-2. In your tool configuration (e.g., `mcp_config.json`), inject the key via environment variables:
-```json
-"Ripen": {
-  "command": "npx",
-  "args": ["-y", "mcp-remote", "http://localhost:8377/sse"],
-  "env": {
-    "SHARED_MEMORY_API_KEY": "your-secret-key-1",
-    "SHARED_MEMORY_ACCOUNT": "cursor_user"
-  }
-}
+### Option B: Docker (For Team Hubs)
+```bash
+docker run -d -p 8377:8377 -v ripen_data:/data ayato-labs/ripen
 ```
 
-## Governance & Licensing
-
-- **Open Source**: [AGPL-3.0](LICENSE) — free for personal and open-source use.
-- **Commercial**: For proprietary integrations or SaaS, a [Commercial License](COMMERCIAL.md) is available.
+### Option C: Native Binary
+Download `ripen.exe` from [GitHub Releases](https://github.com/ayato-labs/ripen/releases).
 
 ---
 
@@ -153,25 +118,17 @@ To enable secure multi-agent access:
 
 ### AI駆動開発が速くなりすぎて、「情報共有」が壊れていませんか？
 
-AI駆動開発によって開発速度は圧倒的に向上しました。
-しかしその結果、チーム内の情報共有が追いつかなくなるという新しい問題が生まれています。
+AI駆動開発によって開発速度は圧倒的に向上しました。しかし、Cursor、Claude Code、Gemini CLI といった複数のツールを併用すると、AIごとの「常識のズレ」が深刻な問題になります。
 
-- Cursorに教えた設計ルールを、Gemini CLIは知らない
-- 昨日Claudeと決めた方針を、今日のCursorは忘れている
-- プロジェクトが大きくなるほど、AIごとの「常識のズレ」が拡大する
+**Ripen** は、すべてのAIツールが同じ「黒板（ブラックボード）」を読み書きできる、ローカルファーストの共有メモリサーバーです。一度教えた設計思想や技術決定をAIが忘れない場所に置くことで、エージェントを「チームの一員」として機能させます。
 
-これが**「AIの多重人格障害」**です。
-
-### 解決策：中央集権型のナレッジ共有MCPサーバー
-
-**Ripen** は、すべてのAIツールが同じ「黒板（ブラックボード）」を読み書きできる、ローカルファーストの共有メモリサーバーです。
-
-一度教えた設計思想は、どのAIツールからでも参照できます。チームの暗黙知を、AIが忘れない場所に置く。それがこのプロジェクトの目的です。
-
-**個人での複数AIエージェント間の知識共有にも使えます。**
-
-詳しい設計思想は [概念的要件定義書](docs/概念的要件定義書.md) をご覧ください。
+詳細は [概念的要件定義書](docs/概念的要件定義書.md) をご覧ください。
 
 ---
+
+## License & Governance
+
+- **Open Source**: [AGPL-3.0](LICENSE) — free for personal and open-source use.
+- **Commercial**: For proprietary integrations, a [Commercial License](COMMERCIAL.md) is available.
 
 *Ripen: Making AI agents remember what your team already decided.*

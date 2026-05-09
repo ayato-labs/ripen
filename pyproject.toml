@@ -40,8 +40,8 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ayato-labs/SharedMemoryServer"
-Repository = "https://github.com/ayato-labs/SharedMemoryServer"
+Homepage = "https://github.com/ayato-labs/ripen"
+Repository = "https://github.com/ayato-labs/ripen"
 
 [project.scripts]
 ripen = "ripen.api.server:main"
