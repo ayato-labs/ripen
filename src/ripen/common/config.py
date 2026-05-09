@@ -33,6 +33,7 @@ class Settings:
     _instance = None
     _base_dir: Path | None = None
     _api_key: str | None = None
+    _config_data: dict = {}
 
     def __new__(cls):
         if cls._instance is None:
@@ -40,7 +41,7 @@ class Settings:
         return cls._instance
 
     def __init__(self):
-        # Load .env if possible
+        # 1. Load .env if possible
         try:
             from dotenv import load_dotenv
 
@@ -48,13 +49,37 @@ class Settings:
         except ImportError:
             logger.debug("python-dotenv not installed; skipping .env loading")
 
+        # 2. Load config.json if it exists
+        self._load_config_json()
+
+    def _load_config_json(self):
+        """base_dirにあるconfig.jsonを読み込む。"""
+        config_path = self.base_dir / "config.json"
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    self._config_data = json.load(f)
+                logger.info(f"Loaded config from {config_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load config.json: {e}")
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """環境変数 > config.json > デフォルトの順で設定値を取得する。"""
+        # 環境変数は大文字でチェック
+        env_val = os.environ.get(key.upper())
+        if env_val is not None:
+            return env_val
+        
+        # config.jsonは小文字キーでチェック
+        return self._config_data.get(key.lower(), default)
+
     @property
     def base_dir(self) -> Path:
         """データ保存のベースディレクトリを返す。"""
         if self._base_dir:
             return self._base_dir
 
-        shared_home = os.environ.get("SHARED_MEMORY_HOME")
+        shared_home = os.environ.get("RIPEN_HOME") or os.environ.get("SHARED_MEMORY_HOME")
         if shared_home:
             self._base_dir = Path(shared_home).absolute()
         else:
@@ -70,8 +95,8 @@ class Settings:
         if self._api_key:
             return self._api_key
 
-        # 1. Environment variables
-        api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        # 1. Environment variables or config.json
+        api_key = self.get("GOOGLE_API_KEY") or self.get("GEMINI_API_KEY")
         if api_key:
             self._api_key = api_key.strip()
             return self._api_key
@@ -92,16 +117,18 @@ class Settings:
                         settings_json = json.load(f)
 
                     # Search in mcpServers -> Ripen -> env
-                    mcp_env = (
-                        settings_json.get("mcpServers", {})
-                        .get("Ripen", {})
-                        .get("env", {})
-                    )
-                    api_key = mcp_env.get("GOOGLE_API_KEY") or mcp_env.get("GEMINI_API_KEY")
-
-                    if api_key:
-                        self._api_key = api_key.strip()
-                        return self._api_key
+                    # Also check for "SharedMemoryServer" for backward compatibility
+                    server_names = ["Ripen", "SharedMemoryServer"]
+                    for name in server_names:
+                        mcp_env = (
+                            settings_json.get("mcpServers", {})
+                            .get(name, {})
+                            .get("env", {})
+                        )
+                        api_key = mcp_env.get("GOOGLE_API_KEY") or mcp_env.get("GEMINI_API_KEY")
+                        if api_key:
+                            self._api_key = api_key.strip()
+                            return self._api_key
         except Exception as e:
             logger.debug(f"Failed to read settings.json: {e}")
 
@@ -110,7 +137,7 @@ class Settings:
     @property
     def embedding_engine(self) -> str:
         """使用するEmbeddingエンジンを返す (fastembed or gemini)。"""
-        engine = os.environ.get("EMBEDDING_ENGINE", DEFAULT_EMBEDDING_ENGINE).lower()
+        engine = self.get("EMBEDDING_ENGINE", DEFAULT_EMBEDDING_ENGINE).lower()
         # Force gemini if API key is present and engine is explicitly gemini,
         # otherwise default to fastembed.
         if engine == "gemini" and self.api_key:
@@ -119,11 +146,11 @@ class Settings:
 
     @property
     def llm_provider(self) -> str:
-        """使用するLLMプロバイダーを返す (ollama or gemini)。"""
-        # 1. Explicit environment variable
-        env_provider = os.environ.get("LLM_PROVIDER")
-        if env_provider:
-            return env_provider.lower()
+        """使用するLLMプロバイダーを返す (ollama or gemini or none)。"""
+        # 1. Explicit environment variable or config.json
+        provider = self.get("LLM_PROVIDER")
+        if provider:
+            return provider.lower()
 
         # 2. Prefer Gemini if API Key is present (Auto-detect)
         if self.api_key:
@@ -136,7 +163,7 @@ class Settings:
     def generative_model(self) -> str:
         """推論や知識抽出に使用する現在の生成モデル名を返す。"""
         if self.llm_provider == "ollama":
-            return OLLAMA_DEFAULT_MODEL
+            return self.get("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
 
         # Dynamic rotation support for Gemini
         from ripen.core.ai_control import model_manager
@@ -153,17 +180,17 @@ class Settings:
     @property
     def ollama_base_url(self) -> str:
         """OllamaのAPIベースURLを返す。"""
-        return OLLAMA_BASE_URL
+        return self.get("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
 
     @property
     def enable_structured_logging(self) -> bool:
         """構造化ログの有効化フラグ。"""
-        return False
+        return self.get("ENABLE_STRUCTURED_LOGGING", "false").lower() == "true"
 
     @property
     def hashtag_ai_threshold(self) -> int:
         """ハッシュタグ抽出においてAIを使用するかロジックを使用するかの文字数閾値。"""
-        return int(os.environ.get("HASHTAG_AI_THRESHOLD", "100"))
+        return int(self.get("HASHTAG_AI_THRESHOLD", "100"))
 
 
 # Singleton instance

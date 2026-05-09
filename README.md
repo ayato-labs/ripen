@@ -97,7 +97,7 @@ We evaluate system performance using the **LongMemEval** suite, comparing Local-
 uv pip install -e .
 
 # Run as a shared hub (SSE mode — recommended for multi-tool setups)
-uv run shared-memory --sse --port 8377
+uv run ripen --sse --port 8377
 ```
 
 Then point your MCP-compatible tools (Cursor, Claude Code, Gemini CLI) at `http://localhost:8377`.

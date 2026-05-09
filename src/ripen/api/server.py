@@ -329,20 +329,17 @@ def main():
     parser.add_argument("--port", type=int, default=8377)
     args = parser.parse_args()
 
-    # --- LLM CONFIG CHECK ---
-    from ripen.common.config import settings
-
-    if settings.llm_provider == "ollama":
-        logger.info(f"LLM Provider: Ollama (Model: {settings.generative_model})")
-    elif settings.llm_provider == "gemini":
-        logger.info("LLM Provider: Google Gemini")
-    else:
-        logger.warning(
-            "NO LLM PROVIDER CONFIGURED. Knowledge distillation will be disabled. "
-            "Please check README.md for setup instructions."
-        )
     if args.sse:
         _kill_port_process(args.port)
+        
+        print("\n" + "="*50)
+        print(f"\033[1;32m✅ Ripen v0.1.0 is running (SSE Mode)\033[0m")
+        print(f"  Transport: \033[1;36mSSE on port {args.port}\033[0m")
+        print(f"  LLM:       \033[1;33m{settings.llm_provider} ({settings.generative_model})\033[0m")
+        print(f"  Data:      \033[1;34m{settings.base_dir}\033[0m")
+        print(f"  Dashboard: \033[1;35mhttp://localhost:{args.port}/dashboard\033[0m")
+        print("="*50 + "\n")
+        
         mcp.run(transport="sse", port=args.port)
     else:
         mcp.run(transport="stdio")
