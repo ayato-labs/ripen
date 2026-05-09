@@ -1,22 +1,26 @@
+import argparse
 import asyncio
 import time
-import argparse
+
 from loguru import logger
+
+from shared_memory.common.config import settings
 from shared_memory.infra.embeddings import compute_embedding
 from shared_memory.infra.llm import get_llm_provider
-from shared_memory.common.config import settings
 
 # Optional: RAGAS integration
 try:
-    from ragas import evaluate
-    from ragas.metrics import faithfulness, answer_relevancy, context_recall, context_precision
+    import ragas  # noqa: F401
     RAGAS_AVAILABLE = True
 except ImportError:
     RAGAS_AVAILABLE = False
 
 async def run_eval(use_ragas: bool = False):
     logger.info("Starting LongMemEval session (Industry Standard Mode)...")
-    logger.info(f"Configuration: LLM={settings.llm_provider}, Embedding={settings.embedding_engine}")
+    logger.info(
+        f"Configuration: LLM={settings.llm_provider}, "
+        f"Embedding={settings.embedding_engine}"
+    )
 
     # 1. Latency Test: Embedding
     start = time.perf_counter()
@@ -28,7 +32,9 @@ async def run_eval(use_ragas: bool = False):
     provider = get_llm_provider()
     start = time.perf_counter()
     try:
-        await provider.generate_content("Say 'Hello, LongMemEval!'", system_instruction="Be concise.")
+        await provider.generate_content(
+            "Say 'Hello, LongMemEval!'", system_instruction="Be concise."
+        )
         llm_latency = (time.perf_counter() - start) * 1000
         logger.info(f"Performance: LLM Latency: {llm_latency:.2f}ms")
     except Exception as e:

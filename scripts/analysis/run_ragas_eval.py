@@ -1,14 +1,9 @@
 import asyncio
-import pandas as pd
-from datasets import Dataset
-from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy, context_recall, context_precision
-from shared_memory.infra.llm import get_llm_provider
-from shared_memory.common.config import settings
 from loguru import logger
 
 # Mocking a small Gold Standard dataset for SharedMemoryServer
-# In a production scenario, these 'contexts' would come from actual search_memory calls
+# In a production scenario, these 'contexts' would come from actual 
+# search_memory calls
 eval_data = {
     "question": [
         "What is the 'ripening' process in SharedMemoryServer?",
@@ -18,21 +13,32 @@ eval_data = {
         "Can I use multiple agents with one server?"
     ],
     "answer": [
-        "Ripening is the process where frequently accessed knowledge is promoted to long-term memory to increase its visibility and durability.",
-        "Sequential thinking integrates with the memory system through 'Salvage' (retrieving past thoughts) and 'Accretion' (distilling new insights into memory).",
-        "Stale knowledge items undergo a decay process and are eventually moved to inactive storage by the garbage collector.",
-        "Yes, it is designed as a local-first system using SQLite and FAISS, ensuring data privacy and low latency.",
-        "Yes, it supports multi-agent authentication using unique API keys and account IDs for traceability."
+        "Ripening is the process where frequently accessed knowledge is promoted "
+        "to long-term memory to increase its visibility and durability.",
+        "Sequential thinking integrates with the memory system through 'Salvage' "
+        "(retrieving past thoughts) and 'Accretion' (distilling new insights into memory).",
+        "Stale knowledge items undergo a decay process and are eventually moved "
+        "to inactive storage by the garbage collector.",
+        "Yes, it is designed as a local-first system using SQLite and FAISS, "
+        "ensuring data privacy and low latency.",
+        "Yes, it supports multi-agent authentication using unique API keys and "
+        "account IDs for traceability."
     ],
     "contexts": [
-        ["Ripening boosts the importance of entities based on access frequency. It's part of the knowledge lifecycle management."],
-        ["The system uses sequential thinking to capture reasoning steps. Salvage retrieves historical context, while Accretion saves new results."],
-        ["The Garbage Collector identifies stale items based on time-based decay and moves them to the inactive database."],
-        ["SharedMemoryServer uses local engines like FastEmbed and SQLite to process data without mandatory cloud dependencies."],
-        ["Multi-agent support is implemented via an authentication layer that tracks which agent wrote which memory."]
+        ["Ripening boosts the importance of entities based on access frequency. "
+         "It's part of the knowledge lifecycle management."],
+        ["The system uses sequential thinking to capture reasoning steps. "
+         "Salvage retrieves historical context, while Accretion saves new results."],
+        ["The Garbage Collector identifies stale items based on time-based decay "
+         "and moves them to the inactive database."],
+        ["SharedMemoryServer uses local engines like FastEmbed and SQLite to "
+         "process data without mandatory cloud dependencies."],
+        ["Multi-agent support is implemented via an authentication layer "
+         "that tracks which agent wrote which memory."]
     ],
     "ground_truth": [
-        "Knowledge ripening promotes frequently used items to ensure they stay relevant and are not decayed.",
+        "Knowledge ripening promotes frequently used items to ensure they stay "
+        "relevant and are not decayed.",
         "It uses Salvage to bring back thoughts and Accretion to store new distilled knowledge.",
         "Stale items are decayed and then archived by the knowledge garbage collection process.",
         "The server is local-first, utilizing SQLite, FAISS, and FastEmbed for on-device processing.",
@@ -44,8 +50,7 @@ async def run_ragas():
     logger.info("Initializing RAGAS evaluation with SharedMemoryServer providers...")
     
     # Create the dataset
-    df = pd.DataFrame(eval_data)
-    dataset = Dataset.from_pandas(df)
+    # df = pd.DataFrame(eval_data) # df is unused in simulated run
     
     # We need to wrap our provider for RAGAS
     # For now, we will simulate the RAGAS output since a full LLM-as-a-judge 

@@ -1,7 +1,7 @@
+import asyncio
 import json
 import os
 import time
-import asyncio
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
@@ -181,7 +181,8 @@ async def process_thought_core(
                 # 2.1 Check for revisions
                 if is_revision and revises_thought:
                     cursor = await conn.execute(
-                        "SELECT id FROM thought_history WHERE session_id = ? AND thought_number = ?",
+                        "SELECT id FROM thought_history "
+                        "WHERE session_id = ? AND thought_number = ?",
                         (session_id, revises_thought),
                     )
                     if not await cursor.fetchone():
@@ -198,7 +199,8 @@ async def process_thought_core(
                 # 2.2 Explicit Duplicate Check (UX/Performance)
                 if not is_revision:
                     cursor = await conn.execute(
-                        "SELECT id FROM thought_history WHERE session_id = ? AND thought_number = ?",
+                        "SELECT id FROM thought_history "
+                        "WHERE session_id = ? AND thought_number = ?",
                         (session_id, thought_number),
                     )
                     if await cursor.fetchone():
@@ -236,16 +238,25 @@ async def process_thought_core(
                             branch_from_thought,
                             branch_id,
                             agent_id,
-                            json.dumps({"env": "development", "timestamp": datetime.now().isoformat()}),
+                            json.dumps({
+                                "env": "development",
+                                "timestamp": datetime.now().isoformat(),
+                            }),
                         ),
                     )
                     await conn.commit()
                 except aiosqlite.IntegrityError as ie:
                     await conn.rollback()
                     error_msg = f"Persistence failure (Duplicate ID): {ie}"
-                    logger.error(f"{error_msg} for session {session_id}, thought {thought_number}")
+                    logger.error(
+                        f"{error_msg} for session {session_id}, "
+                        f"thought {thought_number}"
+                    )
                     return {
-                        "error": "Thought number already exists. Please use a unique number or specify a revision.",
+                        "error": (
+                            "Thought number already exists. "
+                            "Please use a unique number or specify a revision."
+                        ),
                         "details": str(ie),
                         "thoughtNumber": thought_number,
                         "totalThoughts": total_thoughts,
@@ -302,7 +313,9 @@ async def process_thought_core(
             if "PYTEST_CURRENT_TEST" not in os.environ:
                 from shared_memory.common.tasks import create_background_task
 
-                create_background_task(trigger_opportunistic_recovery(), name="opportunistic_recovery")
+                create_background_task(
+                    trigger_opportunistic_recovery(), name="opportunistic_recovery"
+                )
 
             # 8. Final Distillation (Session Wrap-up)
             if not next_thought_needed:

@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -8,6 +7,7 @@ if src_path not in sys.path:
     sys.path.append(src_path)
 
 from google import genai
+
 from shared_memory.common.config import settings
 
 def check_model_metadata():
@@ -28,8 +28,9 @@ def check_model_metadata():
         models = client.models.list()
         for m in models:
             # We look for input_token_limit or context_window equivalent
-            # The structure of Model object in google-genai:
-            # name, version, display_name, description, input_token_limit, output_token_limit, supported_generation_methods
+            # The structure of Model object in google-genai includes:
+            # name, version, display_name, description, input_token_limit, 
+            # output_token_limit, supported_generation_methods
             print(f"Model: {m.name}")
             print(f"  Display Name: {m.display_name}")
             print(f"  Input Token Limit: {getattr(m, 'input_token_limit', 'N/A')}")

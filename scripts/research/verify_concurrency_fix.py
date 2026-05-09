@@ -1,14 +1,14 @@
 
 import asyncio
-import time
-import sys
 import os
+import sys
+import time
 
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
-from shared_memory.core.thought_logic import process_thought_core, init_thoughts_db
 from shared_memory.infra.database import init_db
+from shared_memory.core.thought_logic import init_thoughts_db, process_thought_core
 
 async def simulate_concurrent_thoughts():
     session_id = f"test_concurrency_{int(time.time())}"
@@ -33,7 +33,10 @@ async def simulate_concurrent_thoughts():
             session_id=session_id
         )
         duration = time.perf_counter() - start
-        print(f"Thought #{number} finished in {duration:.3f}s. History length: {result.get('thoughtHistoryLength')}")
+        print(
+            f"Thought #{number} finished in {duration:.3f}s. "
+            f"History length: {result.get('thoughtHistoryLength')}"
+        )
         return result
 
     # Launch Thought 1 and Thought 2 almost simultaneously

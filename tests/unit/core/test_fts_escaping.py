@@ -1,5 +1,6 @@
 
 import pytest
+
 from shared_memory.common.utils import escape_fts5_query
 from shared_memory.core.search import perform_keyword_search
 

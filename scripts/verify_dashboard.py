@@ -5,9 +5,9 @@ import sys
 # Ensure project root is in path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
+from shared_memory.infra.database import async_get_connection, init_db
 from shared_memory.core.logic import save_memory_core
 from shared_memory.ops import management
-from shared_memory.infra.database import init_db, async_get_connection
 
 async def verify():
     print("--- Dashboard & Conflict Resolution Verification ---")
@@ -46,14 +46,19 @@ async def verify():
 
     # 4. Resolve conflict (Approve)
     latest_conflict = conflicts[0] # The list is ordered by DESC detected_at
-    print(f"\n4. Resolving conflict {latest_conflict['id']} for {latest_conflict['entity']} (APPROVE)...")
+    print(
+        f"\n4. Resolving conflict {latest_conflict['id']} "
+        f"for {latest_conflict['entity']} (APPROVE)..."
+    )
     res = await management.resolve_conflict_logic(latest_conflict['id'], "approve")
     print(f"Resolution result: {res}")
     
     # 5. Verify promotion
     print("\n5. Verifying promotion to observations...")
     async with await async_get_connection() as conn:
-        cursor = await conn.execute("SELECT content FROM observations WHERE entity_name = 'ProjectX'")
+        cursor = await conn.execute(
+            "SELECT content FROM observations WHERE entity_name = 'ProjectX'"
+        )
         rows = await cursor.fetchall()
         print("Observations for ProjectX:")
         for r in rows:
