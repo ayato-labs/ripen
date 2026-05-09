@@ -153,11 +153,8 @@ class Settings:
         if provider:
             return provider.lower()
 
-        # 2. Prefer Gemini if API Key is present (Auto-detect)
-        if self.api_key:
-            return "gemini"
-
-        # 3. Fallback to default
+        # 2. Default to the configured default (ollama)
+        # We REMOVED the automatic switch to gemini based on API key to adhere to Local-first.
         return DEFAULT_LLM_PROVIDER
 
     @property
