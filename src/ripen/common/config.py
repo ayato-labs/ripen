@@ -29,7 +29,7 @@ FASTEMBED_DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 
 class Settings:
-    """Ripenの設定を管理するクラス。"""
+    \"\"\"Ripenの設定を管理するクラス。\"\"\"
 
     _instance = None
     _base_dir: Path | None = None
@@ -55,7 +55,7 @@ class Settings:
         self._load_config_json()
 
     def _load_config_json(self):
-        """base_dirにあるconfig.jsonを読み込む。"""
+        \"\"\"base_dirにあるconfig.jsonを読み込む。\"\"\"
         config_path = self.base_dir / "config.json"
         if config_path.exists():
             try:
@@ -66,7 +66,7 @@ class Settings:
                 logger.warning(f"Failed to load config.json: {e}")
 
     def get(self, key: str, default: Any = None) -> Any:
-        """環境変数 > config.json > デフォルトの順で設定値を取得する。"""
+        \"\"\"環境変数 > config.json > デフォルトの順で設定値を取得する。\"\"\"
         # 環境変数は大文字でチェック
         env_val = os.environ.get(key.upper())
         if env_val is not None:
@@ -77,7 +77,7 @@ class Settings:
 
     @property
     def base_dir(self) -> Path:
-        """データ保存のベースディレクトリを返す。"""
+        \"\"\"データ保存のベースディレクトリを返す。\"\"\"
         if self._base_dir:
             return self._base_dir
 
@@ -86,14 +86,15 @@ class Settings:
             self._base_dir = Path(shared_home).absolute()
         else:
             # Default to user home
-            self._base_dir = Path.home() / ".ripen"
+            # Use os.path.expanduser to be more robust than Path.home() in some environments
+            self._base_dir = Path(os.path.expanduser("~")) / ".ripen"
 
         os.makedirs(self._base_dir, exist_ok=True)
         return self._base_dir
 
     @property
     def api_key(self) -> str | None:
-        """Gemini/Google AI APIキーを返す。"""
+        \"\"\"Gemini/Google AI APIキーを返す。\"\"\"
         if self._api_key:
             return self._api_key
 
@@ -130,11 +131,12 @@ class Settings:
         except Exception as e:
             logger.debug(f"Failed to read settings.json: {e}")
 
+        # 2. .env (via load_dotenv in __init__) - already handled by self.get()
         return None
 
     @property
     def embedding_engine(self) -> str:
-        """使用するEmbeddingエンジンを返す (fastembed or gemini)。"""
+        \"\"\"使用するEmbeddingエンジンを返す (fastembed or gemini)。\"\"\"
         engine = self.get("EMBEDDING_ENGINE", DEFAULT_EMBEDDING_ENGINE).lower()
         # Force gemini if API key is present and engine is explicitly gemini,
         # otherwise default to fastembed.
@@ -144,7 +146,7 @@ class Settings:
 
     @property
     def llm_provider(self) -> str:
-        """使用するLLMプロバイダーを返す (ollama or gemini or none)。"""
+        \"\"\"使用するLLMプロバイダーを返す (ollama or gemini or none)。\"\"\"
         # 1. Explicit environment variable or config.json
         provider = self.get("LLM_PROVIDER")
         if provider:
@@ -155,37 +157,40 @@ class Settings:
         return DEFAULT_LLM_PROVIDER
 
     @property
-    def generative_model(self) -> str:
-        """推論や知識抽出に使用する現在の生成モデル名を返す。"""
-        if self.llm_provider == "ollama":
-            return self.get("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
-
-        # Dynamic rotation support for Gemini
-        from ripen.core.ai_control import model_manager
-
-        return model_manager.get_current_model()
-
-    @property
-    def embedding_model(self) -> str:
-        """埋め込みベクトル生成に使用するモデル名を返す。"""
-        if self.embedding_engine == "gemini":
-            return GOOGLE_EMBEDDING_MODEL
-        return FASTEMBED_DEFAULT_MODEL
-
-    @property
     def ollama_base_url(self) -> str:
-        """OllamaのAPIベースURLを返す。"""
+        \"\"\"OllamaのベースURLを返す。\"\"\"
         return self.get("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
 
     @property
-    def enable_structured_logging(self) -> bool:
-        """構造化ログの有効化フラグ。"""
-        return self.get("ENABLE_STRUCTURED_LOGGING", "false").lower() == "true"
+    def ollama_model(self) -> str:
+        \"\"\"Ollamaで使用するデフォルトモデルを返す。\"\"\"
+        return self.get("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
 
     @property
-    def hashtag_ai_threshold(self) -> int:
-        """ハッシュタグ抽出においてAIを使用するかロジックを使用するかの文字数閾値。"""
-        return int(self.get("HASHTAG_AI_THRESHOLD", "100"))
+    def fastembed_model(self) -> str:
+        \"\"\"FastEmbedで使用するデフォルトモデルを返す。\"\"\"
+        return self.get("FASTEMBED_MODEL", FASTEMBED_DEFAULT_MODEL)
+
+    @property
+    def google_ai_model(self) -> str:
+        \"\"\"Google AIで使用するモデルを返す。\"\"\"
+        # TODO: Load balancing or model selection logic if needed
+        return GOOGLE_AI_MODELS[0]
+
+    @property
+    def google_compression_model(self) -> str:
+        \"\"\"Google AIで使用する圧縮用モデルを返す。\"\"\"
+        return GOOGLE_COMPRESSION_MODELS[0]
+
+    @property
+    def google_embedding_model(self) -> str:
+        \"\"\"Google AIで使用するEmbeddingモデルを返す。\"\"\"
+        return GOOGLE_EMBEDDING_MODEL
+
+    @property
+    def log_level(self) -> str:
+        \"\"\"ログレベルを返す。\"\"\"
+        return self.get("LOG_LEVEL", "INFO").upper()
 
     @property
     def plugins(self) -> list:
@@ -208,5 +213,5 @@ class Settings:
         return int(self.get("SSE_PORT", "8377"))
 
 
-# Singleton instance
+# Global settings instance
 settings = Settings()
