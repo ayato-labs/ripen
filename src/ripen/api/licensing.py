@@ -1,135 +1,133 @@
+import base64
 import json
 import os
-import platform
-import subprocess
-import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
 
-import requests
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.exceptions import InvalidSignature
-
 from ripen.common.config import settings
 from ripen.common.utils import get_logger
 
 logger = get_logger("licensing")
 
 class LicenseManager:
+    """ライセンス管理を行うクラス。オフライン署名検証に対応。"""
+
     def __init__(self):
-        self.verify_url = "https://api.gumroad.com/v2/licenses/verify"
-        self.cache_file = settings.base_dir / "license.cache"
-        self.fingerprint = self._get_machine_fingerprint()
+        self.license_path = settings.license_key_path
+        self.public_key_base64 = settings.license_public_key
+        self._cached_license_info = None
 
-    def _get_machine_fingerprint(self) -> str:
-        """マシン固有のIDを生成する。"""
-        # 1. Try to get system UUID (Windows/macOS/Linux)
-        try:
-            if platform.system() == "Windows":
-                cmd = "wmic csproduct get uuid"
-                uuid_str = subprocess.check_output(cmd, shell=True).decode().split("\n")[1].strip()
-                if uuid_str:
-                    return uuid_str
-            elif platform.system() == "Darwin":
-                cmd = "ioreg -rd1 -c IOPlatformExpertDevice | grep -E 'IOPlatformUUID'"
-                uuid_str = subprocess.check_output(cmd, shell=True).decode().split('"')[-2]
-                if uuid_str:
-                    return uuid_str
-        except Exception:
-            logger.debug("Failed to get system UUID, falling back to node ID")
-
-        # 2. Fallback to MAC address based node ID
-        return str(uuid.getnode())
-
-    def activate(self, license_key: str) -> dict:
-        """Gumroad APIを使用してライセンスを有効化する。"""
-        logger.info(f"Activating license via Gumroad for machine: {self.fingerprint}")
-
-        payload = {
-            "product_id": settings.gumroad_product_id,
-            "license_key": license_key,
-            "increment_uses_count": "true" # 使用回数をカウントアップ
-        }
-
-        try:
-            resp = requests.post(self.verify_url, data=payload)
-            data = resp.json()
-
-            if resp.status_code == 200 and data.get("success"):
-                logger.info("Gumroad license activation successful.")
-                # 追加情報としてフィンガープリントとキーを保存
-                data["meta"] = {
-                    "activated_at": datetime.now().isoformat(),
-                    "fingerprint": self.fingerprint,
-                    "license_key": license_key
-                }
-                self._save_to_cache(json.dumps(data))
-                return data
-            else:
-                error_msg = data.get("message", "Unknown error from Gumroad")
-                raise Exception(f"Activation failed: {error_msg}")
-
-        except Exception as e:
-            logger.error(f"Network error during activation: {e}")
-            raise
-
-    def _save_to_cache(self, raw_data: str):
-        """認証情報をローカルにキャッシュする。"""
-        try:
-            with open(self.cache_file, "w", encoding="utf-8") as f:
-                f.write(raw_data)
-            logger.info(f"License information cached to {self.cache_file}")
-        except Exception as e:
-            logger.error(f"Failed to cache license: {e}")
+    def _get_public_key(self) -> ed25519.Ed25519PublicKey:
+        """Base64形式の公開鍵をオブジェクトに変換する。"""
+        public_bytes = base64.b64decode(self.public_key_base64)
+        return ed25519.Ed25519PublicKey.from_public_bytes(public_bytes)
 
     def validate_locally(self) -> bool:
-        """ローカルキャッシュを使用してライセンスを検証する。"""
-        if not self.cache_file.exists():
-            return False
+        """
+        ローカルに保存されたライセンスを検証する。
+        ライセンスがない場合は、試用期間内かどうかをチェックする。
+        """
+        # 1. Check for license file
+        if not self.license_path.exists():
+            logger.debug("No license file found. Checking trial status.")
+            return self._check_trial_status()
 
         try:
-            with open(self.cache_file, encoding="utf-8") as f:
-                data = json.load(f)
+            # 2. Read and Verify License
+            with open(self.license_path, "rb") as f:
+                signed_data = f.read()
 
-            # Gumroadの成功フラグを確認
-            if not data.get("success"):
-                return False
+            # The file format is [signature(64 bytes)][json_payload]
+            if len(signed_data) <= 64:
+                logger.error("Invalid license file format (too short)")
+                return self._check_trial_status()
 
-            # マシンの一致確認（簡易的なコピー防止）
-            meta = data.get("meta", {})
-            if meta.get("fingerprint") != self.fingerprint:
-                logger.warning("License was activated on a different machine.")
-                return False
+            signature = signed_data[:64]
+            payload_bytes = signed_data[64:]
 
-            # 返金・チャージバック等の確認
-            purchase = data.get("purchase", {})
-            if purchase.get("refunded") or purchase.get("chargebacked"):
-                logger.warning("License has been refunded or chargebacked.")
-                return False
+            # Verify signature
+            public_key = self._get_public_key()
+            try:
+                public_key.verify(signature, payload_bytes)
+            except InvalidSignature:
+                logger.error("License signature verification failed")
+                return self._check_trial_status()
 
-            # 最終確認としてオンラインで再検証する（オプション: 毎回ではなく一定期間ごとなど）
-            # ここではシンプルにするため、キャッシュがあれば有効とする
+            # 3. Parse and Check Expiry
+            payload = json.loads(payload_bytes.decode('utf-8'))
+            self._cached_license_info = payload
+
+            expiry_str = payload.get("expiry")
+            if not expiry_str:
+                logger.error("License missing expiry field")
+                return self._check_trial_status()
+
+            expiry_date = datetime.fromisoformat(expiry_str)
+            if datetime.now() > expiry_date:
+                logger.warning(f"License expired on {expiry_date}")
+                return self._check_trial_status()
+
+            logger.info(f"Valid license found. Registered to: {payload.get('user', 'Unknown')}")
             return True
+
         except Exception as e:
-            logger.error(f"Error during local validation: {e}")
+            logger.error(f"Error during local license validation: {e}")
+            return self._check_trial_status()
+
+    def activate(self, license_key_path: str | Path) -> bool:
+        """
+        外部のライセンスファイルを取り込んで有効化する。
+        """
+        source_path = Path(license_key_path)
+        if not source_path.exists():
+            logger.error(f"Provided license file not found: {license_key_path}")
             return False
 
-    def get_status_summary(self) -> str:
-        """現在のライセンス状態の要約を返す。"""
-        if not self.cache_file.exists():
-            return "No license activated."
-        
         try:
-            with open(self.cache_file, encoding="utf-8") as f:
-                data = json.load(f)
+            # Copy to app directory
+            import shutil
+            shutil.copy2(source_path, self.license_path)
             
-            purchase = data.get("purchase", {})
-            email = purchase.get("email", "Unknown")
-            valid = self.validate_locally()
+            # Re-validate
+            return self.validate_locally()
+        except Exception as e:
+            logger.error(f"Failed to activate license: {e}")
+            return False
+
+    def _check_trial_status(self) -> bool:
+        """
+        180日間の試用期間内かどうかをチェックする。
+        """
+        trial_marker = settings.base_dir / ".trial_start"
+        
+        if not trial_marker.exists():
+            # First run, create marker
+            with open(trial_marker, "w") as f:
+                f.write(datetime.now().isoformat())
+            return True
+
+        try:
+            with open(trial_marker, "r") as f:
+                start_str = f.read().strip()
+            start_date = datetime.fromisoformat(start_str)
             
-            status = "VALID" if valid else "INVALID"
-            return f"License (Gumroad) | Status: {status} | User: {email}"
+            trial_days = 180
+            expiry_date = start_date + timedelta(days=trial_days)
+            
+            if datetime.now() < expiry_date:
+                logger.debug(f"Within trial period. Remaining days: {(expiry_date - datetime.now()).days}")
+                return True
+            else:
+                logger.warning("Trial period has expired.")
+                return False
         except Exception:
-            return "Error reading license status."
+            return False
+
+    @property
+    def info(self) -> dict:
+        """現在のライセンス情報を返す。"""
+        if self._cached_license_info:
+            return self._cached_license_info
+        return {"type": "trial", "status": "active" if self._check_trial_status() else "expired"}

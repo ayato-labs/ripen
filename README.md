@@ -11,9 +11,11 @@
 > **Official Distribution**: Always download `ripen.exe` from the [Official GitHub Releases](https://github.com/ayato-labs/ripen/releases). This ensures you have the latest signed binary with all security patches.
 
 > [!TIP]
-> **🚀 180-Day Free Commercial Trial Available!**
-> We offer a generous **180-day (approx. 6 months) evaluation period** for professional teams. Test Ripen in your proprietary infrastructure risk-free.
-> **How to Start**: Just send a quick email to [licensing@ayato-studio.ai](mailto:licensing@ayato-studio.ai) or open a GitHub issue to notify us of your trial start. No strings attached for 6 months. [See COMMERCIAL.md](COMMERCIAL.md).
+> **🚀 Special Campaign: 1-Year Free Professional License!**
+> To celebrate our launch, we are distributing **1-year Professional Licenses for FREE**!
+> **Features**: Unlimited sync, commercial rights, and priority updates.
+> **How to Apply**: Open a [GitHub Issue](https://github.com/ayato-labs/ripen/issues/new?title=Request+Pro+License) or email [contact@ayato-labs.com](mailto:contact@ayato-labs.com).
+> **Activation**: `ripen-admin license activate ./license.rpn`
 
 > 🇯🇵 **Claude Code・Cursor・Antigravity・Gemini CLI——違うアカウントを使った別の人のPCで稼働するAIエージェントとの間でも、知識を共有できる。これが Ripen の根本的な価値です。**
 

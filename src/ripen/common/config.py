@@ -36,8 +36,8 @@ class Settings:
     _api_key: str | None = None
     _config_data: dict = {}
     _plugins: list = []
-    # --- Licensing (Gumroad) ---
-    gumroad_product_id: str = os.getenv("RIPEN_GUMROAD_PRODUCT_ID", "your_product_id_here")
+    # --- Licensing ---
+    license_public_key: str = os.getenv("RIPEN_LICENSE_PUBLIC_KEY", "vF9JtiTPlurcpy6F4UywkLdyisrHXEaU75CjeCVvZfg=")
 
     def __new__(cls):
         if cls._instance is None:
@@ -207,14 +207,9 @@ class Settings:
         return int(self.get("SSE_PORT", "8377"))
 
     @property
-    def keygen_account_id(self) -> str:
-        """KeygenのアカウントIDを返す。"""
-        return self._keygen_account_id
-
-    @property
-    def keygen_public_key(self) -> str:
-        """Keygenの署名検証用公開鍵を返す。"""
-        return self._keygen_public_key
+    def license_key_path(self) -> Path:
+        """ライセンスファイルの保存パスを返す。"""
+        return self.base_dir / "license.rpn"
 
 
 # Global settings instance

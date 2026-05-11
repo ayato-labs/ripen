@@ -36,19 +36,20 @@ Ripenは「個人の利便性や少人数での開発体験（Single-player util
 
 ### 💰 料金プラン (Pricing Plan)
 - **Free Plan**: 0円 (AGPL-3.0)。個人、OSSプロジェクト、教育利用。
-- **Professional Plan**: 月額 1,000 円 / 年額 10,000 円。小規模チーム、商用利用。
-  - 特典: 180日間の長期無料トライアル、優先サポート、商用利用権。
+- **Professional Plan (Launch Campaign)**: **初年度 0円 (1年限定ライセンス)**。
+  - 特典: 商用利用権
+  - **更新時**: 市場の状況に合わせて、月額 1,000 円 / 年額 10,000 円への移行を検討。
 - **Enterprise Plan**: 個別見積もり。大規模組織、SSO必須、SLA要求。
 
 ## 3. 配信・運用スタック (Distribution & Operations)
 
 個人開発者としての持続可能性を重視し、グローバルな税制対応やライセンス管理を自動化するスタックを採用します。
 
-### 🔑 ライセンス管理: License-as-a-Service
-- **フェーズ1 (Launch)**: [Gumroad](https://gumroad.com/)
-  - **理由**: 審査なしで即日販売開始が可能。MoR（再販）モデルにより特商法の住所非公開が可能。標準の「License Key」機能を活用し、開発工数を最小化する。
-- **フェーズ2 (Scaling)**: [Paddle](https://paddle.com/) または [Lemon Squeezy](https://keygen.sh/)
-  - **理由**: 売上規模が拡大し、手数料（10% → 5%）のメリットが管理コストを上回った段階で移行。
+### 🔑 ライセンス管理: Self-Signed Offline License
+- **フェーズ1 (Launch)**: **自前 Ed25519 署名方式 (Current)**
+  - **理由**: 外部決済サービスの審査や住所検証の摩擦をゼロにする。GitHub Issue 等での「申請制」にすることで、初期ユーザーとのエンゲージメントを高め、顧客リストを構築する。
+- **フェーズ2 (Monetization)**: [Stripe](https://stripe.com/) または [Gumroad](https://gumroad.com/) / [BOOTH](https://booth.pm/)
+  - **理由**: 有料化の準備が整い、バーチャルオフィス等のインフラが整備された段階で、決済自動化のために導入。
 
 ### 📦 配信・リポジトリモデル (Split Repository Strategy)
 知的財産の保護とOSSコミュニティへの還元を両立するため、リポジトリを物理的に分離します。
