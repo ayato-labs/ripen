@@ -14,7 +14,7 @@
 > **🚀 Special Campaign: 1-Year Free Professional License!**
 > To celebrate our launch, we are distributing **1-year Professional Licenses for FREE**!
 > **Features**: Unlimited sync, commercial rights, and priority updates.
-> **How to Apply**: Open a [GitHub Issue](https://github.com/ayato-labs/ripen/issues/new?title=Request+Pro+License) or email [contact@ayato-labs.com](mailto:contact@ayato-labs.com).
+> **How to Apply**: Open a [GitHub Issue](https://github.com/ayato-labs/ripen/issues/new?title=Request+Pro+License) or email [cwblog69@gmail.com](mailto:cwblog69@gmail.com).
 > **Activation**: `ripen-admin license activate ./license.rpn`
 
 > 🇯🇵 **Claude Code・Cursor・Antigravity・Gemini CLI——違うアカウントを使った別の人のPCで稼働するAIエージェントとの間でも、知識を共有できる。これが Ripen の根本的な価値です。**
