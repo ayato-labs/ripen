@@ -36,8 +36,8 @@ class Settings:
     _api_key: str | None = None
     _config_data: dict = {}
     _plugins: list = []
-    _keygen_account_id: str = "cbb8a935-7ae1-473d-9be6-3f02fdd07143"
-    _keygen_public_key: str = "MCowBQYDK2VwAyEADmktcYSHqC1Cozc6JeCcuXHvAIfYSECDLp9rPZMmRC8="
+    # --- Licensing (Gumroad) ---
+    gumroad_product_id: str = os.getenv("RIPEN_GUMROAD_PRODUCT_ID", "your_product_id_here")
 
     def __new__(cls):
         if cls._instance is None:

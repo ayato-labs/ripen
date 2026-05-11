@@ -34,17 +34,21 @@ Ripenは「個人の利便性や少人数での開発体験（Single-player util
 - クラウドでの PostgreSQL 等のフルマネージドDBサポート、または Turso (LibSQL) を用いた複数拠点間（エッジ）での高速なナレッジ自動同期。
 - **Value Prop**: ユーザーが自分でDBサーバーを運用・監視する手間を「ゼロ」にするマネージド体験の提供。
 
+### 💰 料金プラン (Pricing Plan)
+- **Free Plan**: 0円 (AGPL-3.0)。個人、OSSプロジェクト、教育利用。
+- **Professional Plan**: 月額 1,000 円 / 年額 10,000 円。小規模チーム、商用利用。
+  - 特典: 180日間の長期無料トライアル、優先サポート、商用利用権。
+- **Enterprise Plan**: 個別見積もり。大規模組織、SSO必須、SLA要求。
+
 ## 3. 配信・運用スタック (Distribution & Operations)
 
 個人開発者としての持続可能性を重視し、グローバルな税制対応やライセンス管理を自動化するスタックを採用します。
 
-### 💳 支払窓口: Merchant of Record (MoR)
-- **採用候補**: [Lemon Squeezy](https://www.lemonsqueezy.com/) または [Paddle](https://www.paddle.com/)
-- **理由**: 世界各国の消費税・VATの計算、徴収、納税代行をすべて委託するため。
-
 ### 🔑 ライセンス管理: License-as-a-Service
-- **採用候補**: [Keygen.sh](https://keygen.sh/)
-- **内容**: APIベースのライセンス認証、デバイス制限（1ライセンスN台まで）、有効期限管理の自動化。
+- **フェーズ1 (Launch)**: [Gumroad](https://gumroad.com/)
+  - **理由**: 審査なしで即日販売開始が可能。MoR（再販）モデルにより特商法の住所非公開が可能。標準の「License Key」機能を活用し、開発工数を最小化する。
+- **フェーズ2 (Scaling)**: [Paddle](https://paddle.com/) または [Lemon Squeezy](https://keygen.sh/)
+  - **理由**: 売上規模が拡大し、手数料（10% → 5%）のメリットが管理コストを上回った段階で移行。
 
 ### 📦 配信・リポジトリモデル (Split Repository Strategy)
 知的財産の保護とOSSコミュニティへの還元を両立するため、リポジトリを物理的に分離します。
@@ -71,8 +75,9 @@ Ripenは「個人の利便性や少人数での開発体験（Single-player util
 - **アクセス権の付与**: 購入者の GitHub ID に対し、リポジトリへの読み取り権限を動的に付与。
 
 ### 🛡️ ライセンスの強制力（Enforcement）
-- **起動時バリデーション**: `ripen-core` の起動時に、商用プラグインが Keygen.sh と通信し検証。
-- **機能の凍結（Feature Freezing）**: ライセンス失効時、商用機能をアンロードし OSS モードへ退避。
+- **起動時バリデーション**: `ripen-core` の起動時に `LicenseManager` が署名を検証。 ✅ 実装済
+- **暗号学的信頼**: Ed25519 公開鍵による署名検証。サーバーからのレスポンス改ざんを 100% 検知可能。
+- **機能の凍結（Feature Freezing）**: ライセンス失効または不正署名時、商用機能をアンロードし OSS モードへ退避。
 
 ## 6. 法務・コンプライアンス戦略 (Legal & Compliance)
 
