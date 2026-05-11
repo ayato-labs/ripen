@@ -83,25 +83,20 @@ def configure_logging():
         return
 
     # 3. Main Structured JSON log (Traceability)
-    # Forced rotation on startup to satisfy "retains last 2 executions" requirement.
-    # We use a lambda for rotation that returns True the first time it's called.
-    # In Loguru, rotation="00:00" or similar doesn't help with "per execution".
-    # However, we can use a filename with a timestamp or just force rotate.
-    # Let's use rotation=lambda _, __: True to rotate every time the script starts.
-    _startup_time = datetime.now().isoformat()
+    # Uses timestamp in filename to ensure separate logs per execution.
+    # retention=2 ensures we keep only the last two executions.
     logger.add(
-        "logs/server.jsonl",
+        "logs/server_{time:YYYY-MM-DD_HH-mm-ss}.jsonl",
         format="{message}",
         level="DEBUG",
         serialize=True,
-        rotation=lambda _, __: True,  # Rotate every startup
-        retention=2,  # Keep only last 2 execution logs
+        retention=2,
         encoding="utf-8",
         enqueue=True,
     )
 
     _LOGGING_CONFIGURED = True
-    logger.info(f"Logging infrastructure initialized (Startup: {_startup_time})")
+    logger.info(f"Logging infrastructure initialized (Startup: {datetime.now().isoformat()})")
 
 
 def get_logger(name: str):
