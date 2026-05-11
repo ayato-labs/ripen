@@ -84,16 +84,16 @@ def configure_logging():
         return
 
     # 3. Main Structured JSON log (Traceability)
-    # Rotation=lambda: True ensures a new file is started on every execution.
-    # Retention=2 keeps exactly the last two files.
+    # Use size-based rotation to avoid PermissionError on Windows during startup.
+    # Retention=5 keeps enough history for debugging.
     _startup_time = datetime.now().isoformat()
     logger.add(
         "logs/server.jsonl",
         format="{message}",
         level="DEBUG",
         serialize=True,
-        rotation=lambda _, __: True,
-        retention=2,
+        rotation="10 MB",
+        retention=5,
         encoding="utf-8",
         enqueue=True,
     )

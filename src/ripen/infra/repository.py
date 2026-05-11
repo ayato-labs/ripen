@@ -65,11 +65,21 @@ class BankRepository(BaseSQLiteRepository, IBankRepository):
         )
         return await cursor.fetchall()
 
-    async def update_status(self, filename: str, status: str) -> None:
-        await self.conn.execute(
-            "UPDATE bank_files SET status = ?, last_synced = CURRENT_TIMESTAMP WHERE filename = ?",
-            (status, filename),
+    async def update_status(self, filenames: str | list[str], status: str) -> int:
+        if isinstance(filenames, str):
+            filenames = [filenames]
+        if not filenames:
+            return 0
+        placeholders = ",".join(["?"] * len(filenames))
+        cursor = await self.conn.execute(
+            f"UPDATE bank_files SET status = ?, last_synced = CURRENT_TIMESTAMP WHERE filename IN ({placeholders})",
+            [status] + filenames,
         )
+        return cursor.rowcount
+
+    async def get_inactive_bank_files(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM bank_files WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
 
 
 class AuditRepository(BaseSQLiteRepository, IAuditRepository):
@@ -102,8 +112,13 @@ class AuditRepository(BaseSQLiteRepository, IAuditRepository):
             params.append(table_name)
         query += "ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
-        cursor = await self.conn.execute(query, params)
+        cursor = await self.conn.execute(query, tuple(params))
         return [dict(r) for r in await cursor.fetchall()]
+
+    async def get_audit_log_by_id(self, audit_id: int) -> dict[str, Any] | None:
+        cursor = await self.conn.execute("SELECT * FROM audit_logs WHERE id = ?", (audit_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
 
 class EntityRepository(BaseSQLiteRepository, IEntityRepository):
@@ -147,11 +162,21 @@ class EntityRepository(BaseSQLiteRepository, IEntityRepository):
         )
         return [dict(r) for r in await cursor.fetchall()]
 
-    async def update_status(self, name: str, status: str) -> None:
-        await self.conn.execute(
-            "UPDATE entities SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-            (status, name),
+    async def update_status(self, names: str | list[str], status: str) -> int:
+        if isinstance(names, str):
+            names = [names]
+        if not names:
+            return 0
+        placeholders = ",".join(["?"] * len(names))
+        cursor = await self.conn.execute(
+            f"UPDATE entities SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE name IN ({placeholders})",
+            [status] + names,
         )
+        return cursor.rowcount
+
+    async def get_inactive_entities(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM entities WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
 
 
 class RelationRepository(BaseSQLiteRepository, IRelationRepository):
@@ -195,6 +220,20 @@ class RelationRepository(BaseSQLiteRepository, IRelationRepository):
             (status, subject, object, predicate),
         )
 
+    async def update_status_by_entities(self, names: list[str], status: str) -> int:
+        if not names:
+            return 0
+        placeholders = ",".join(["?"] * len(names))
+        cursor = await self.conn.execute(
+            f"UPDATE relations SET status = ? WHERE subject IN ({placeholders}) OR object IN ({placeholders})",
+            [status] + names + names,
+        )
+        return cursor.rowcount
+
+    async def get_inactive_relations(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM relations WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
+
 
 class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
     async def get_recent_observations(self, entity_name: str, limit: int = 5) -> list[str]:
@@ -235,6 +274,20 @@ class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
             (status, obs_id),
         )
 
+    async def update_status_by_entities(self, names: list[str], status: str) -> int:
+        if not names:
+            return 0
+        placeholders = ",".join(["?"] * len(names))
+        cursor = await self.conn.execute(
+            f"UPDATE observations SET status = ? WHERE entity_name IN ({placeholders})",
+            [status] + names,
+        )
+        return cursor.rowcount
+
+    async def get_inactive_observations(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM observations WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
+
 
 class ConflictRepository(BaseSQLiteRepository, IConflictRepository):
     async def insert_conflict(
@@ -255,15 +308,13 @@ class ConflictRepository(BaseSQLiteRepository, IConflictRepository):
         cursor = await self.conn.execute("SELECT * FROM conflicts WHERE resolved = 0")
         return [dict(r) for r in await cursor.fetchall()]
 
-    async def resolve_conflict(self, conflict_id: int) -> dict[str, Any] | None:
+    async def get_conflict_by_id(self, conflict_id: int) -> dict[str, Any] | None:
         cursor = await self.conn.execute("SELECT * FROM conflicts WHERE id = ?", (conflict_id,))
         row = await cursor.fetchone()
-        if row:
-            await self.conn.execute(
-                "UPDATE conflicts SET resolved = 1 WHERE id = ?", (conflict_id,)
-            )
-            return dict(row)
-        return None
+        return dict(row) if row else None
+
+    async def mark_resolved(self, conflict_id: int) -> None:
+        await self.conn.execute("UPDATE conflicts SET resolved = 1 WHERE id = ?", (conflict_id,))
 
 
 class EmbeddingRepository(BaseSQLiteRepository, IEmbeddingRepository):
@@ -291,6 +342,10 @@ class EmbeddingRepository(BaseSQLiteRepository, IEmbeddingRepository):
             """,
             (content_hash, json.dumps(vector), model_name),
         )
+
+    async def get_all_embeddings(self) -> list[tuple[str, bytes]]:
+        cursor = await self.conn.execute("SELECT content_id, vector FROM embeddings")
+        return await cursor.fetchall()
 
 
 class TroubleshootingRepository(BaseSQLiteRepository, ITroubleshootingRepository):
@@ -712,3 +767,19 @@ class ManagementRepository(BaseSQLiteRepository, IManagementRepository):
         cursor = await self.conn.execute("SELECT id, name, timestamp FROM snapshots ORDER BY timestamp DESC")
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
+
+    async def optimize_database(self) -> None:
+        await self.conn.execute("PRAGMA optimize")
+        await self.conn.execute("ANALYZE")
+
+    async def get_stale_knowledge_ids(self, age_days: int) -> list[str]:
+        # Consider knowledge stale if it hasn't been accessed for age_days
+        # and has low importance.
+        query = """
+            SELECT content_id FROM metadata
+            WHERE last_accessed < date('now', ?)
+            AND access_count < 5
+        """
+        cursor = await self.conn.execute(query, (f"-{age_days} days",))
+        rows = await cursor.fetchall()
+        return [r[0] for r in rows]
