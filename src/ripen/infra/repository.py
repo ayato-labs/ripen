@@ -488,7 +488,7 @@ class SearchRepository(BaseSQLiteRepository, ISearchRepository):
     ) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             f"SELECT {id_col}, {content_col} FROM {table} "
-            f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?) AND (status = 'active' OR 1=1)",
+            f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?)",
             (f"%{query}%", f"%{query}%"),
         )
         return [dict(r) for r in await cursor.fetchall()]

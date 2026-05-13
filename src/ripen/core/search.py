@@ -47,7 +47,7 @@ async def perform_keyword_search(
         (
             "troubleshooting_knowledge",
             "troubleshooting_knowledge_fts",
-            "id",
+            "rowid",
             "solution",
             "STABLE",
             2.5,
@@ -76,7 +76,12 @@ async def perform_keyword_search(
             rows = await uow.search.perform_fts_search(
                 fts_table, id_col, content_col, title_col, fts_query
             )
-            for row_id, content, title, rank in rows:
+            for row in rows:
+                row_id = row[id_col]
+                content = row[content_col]
+                title = row[title_col]
+                rank = list(row.values())[-1] # bm25 result
+                
                 score = max(0.1, abs(rank) * boost)
                 if query.lower() in str(row_id).lower() or query.lower() in str(title).lower():
                     score += 15.0
@@ -86,14 +91,19 @@ async def perform_keyword_search(
                 scored_results[key] = (current_score + score, str(content), maturity)
         except Exception:
             rows = await uow.search.perform_like_search(source_name, id_col, content_col, query)
-            for row_id, content in rows:
+            for row in rows:
+                row_id = row[id_col]
+                content = row[content_col]
                 key = (source_name, row_id)
                 current_score, _, _ = scored_results.get(key, (0.0, "", ""))
                 scored_results[key] = (current_score + (2.0 * boost), str(content), maturity)
 
-    # 1.1 Search Tags
+    # 1.1 Search Tags (Limit to 30 to prevent flood)
     rows = await uow.tags.search_tags(query_words)
-    for cid, ctype, tag in rows:
+    for row in rows[:30]:
+        cid = row["content_id"]
+        ctype = row["content_type"]
+        tag = row["tag"]
         score = 15.0
         source_label = ctype + "s" if not ctype.endswith("s") else ctype
         if source_label == "entitys":
@@ -114,7 +124,11 @@ async def perform_keyword_search(
 
             async with UnitOfWork(is_thoughts=True) as t_uow:
                 rows = await t_uow.thoughts.search_thoughts(fts_query, exclude_session_id or "")
-                for sess_id, t_num, thought, rank in rows:
+                for row in rows:
+                    sess_id = row["session_id"]
+                    t_num = row["thought_number"]
+                    thought = row["thought"]
+                    rank = list(row.values())[-1]
                     score = max(0.1, abs(rank) * 0.3)
                     key = ("thought_history", f"{sess_id}#{t_num}")
                     current_score, _, _ = scored_results.get(key, (0.0, "", ""))
@@ -157,14 +171,15 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
         keyword_results = await task_keyword
 
         if not query_vector or not all_rows:
-            return await get_graph_data(uow), await read_bank_data(uow, query)
+            logger.warning(f"No search context available. query_vector={bool(query_vector)}, all_rows={len(all_rows) if all_rows else 0}")
+            return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
 
-        all_cids = [r[0] for r in all_rows]
-        all_vectors = [json.loads(r[1]) for r in all_rows]
+        all_cids = [r["content_id"] for r in all_rows]
+        all_vectors = [json.loads(r["vector"]) for r in all_rows]
         similarities = batch_cosine_similarity(query_vector, all_vectors)
 
         metadata_rows = await uow.metadata.get_all_metadata()
-        meta_map = {m[0]: (m[1], m[2]) for m in metadata_rows}
+        meta_map = {m["content_id"]: (m["access_count"], m["last_accessed"]) for m in metadata_rows}
 
         results = []
         seen_cids = set()
@@ -218,7 +233,7 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
 
     except Exception as e:
         log_error(f"Search failed for query: {query}", e)
-        return await get_graph_data(uow), await read_bank_data(uow, query)
+        return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
 
 
 async def get_graph_data_by_cids(cids: list[str], uow):
@@ -232,7 +247,8 @@ async def get_graph_data_by_cids(cids: list[str], uow):
     ts_rows = await uow.troubleshooting.get_troubleshooting_by_ids(ts_ids)
 
     matched_names = [e["name"] for e in entities]
-    relations = await uow.relations.get_relations_by_subjects_or_objects(matched_names)
+    all_relations = await uow.relations.get_relations_by_subjects_or_objects(matched_names)
+    relations = all_relations[:30]
 
     return {
         "entities": [dict(e) for e in entities],

@@ -380,8 +380,9 @@ async def read_memory_core(query: str | None = None) -> dict[str, Any] | str:
             if query:
                 graph_data, bank_data = await search.perform_search(query, uow)
             else:
-                graph_data = await graph.get_graph_data(uow)
-                bank_data = await bank.read_bank_data(uow)
+                # IMPORTANT: DO NOT return all data. Limit to recent 20 items.
+                graph_data = await graph.get_graph_data(uow, limit=20)
+                bank_data = await bank.read_bank_data(uow, limit=5) # Bank is also heavy
 
             duration = time.perf_counter() - start_time
             logger.info(f"read_memory_core COMPLETE query='{query}' duration={duration:.2f}s")
