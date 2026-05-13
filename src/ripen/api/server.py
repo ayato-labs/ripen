@@ -410,6 +410,7 @@ def main():
     parser.add_argument("--port", type=int, help="SSE port (overrides config)")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to listen on (for SSE mode)")
     parser.add_argument("--hub-url", type=str, help="URL of a remote Ripen Hub (for stdio proxy mode)")
+    parser.add_argument("hub_url_pos", type=str, nargs="?", help="Positional URL of a remote Ripen Hub")
     parser.add_argument("--uninstall", action="store_true", help="Completely erase Ripen data and shortcuts")
     parser.add_argument("--activate", type=str, help="Activate Ripen with a license key")
     parser.add_argument("--license-status", action="store_true", help="Show current license status")
@@ -483,20 +484,23 @@ def main():
                 else:
                     time.sleep(10)
         else:
-            # If a remote Hub URL is explicitly provided, use it directly.
-            # Otherwise, use the local port and ensure a Hub is running locally.
-            if args.hub_url:
-                hub_url = args.hub_url.rstrip("/")
-                logger.info(f"Connecting to REMOTE Hub at {hub_url}")
-                asyncio.run(run_stdio_proxy(hub_url))
+            # ADAPTIVE DISCOVERY: Try remote Hub first (if provided), then local Hub.
+            # We use the positional argument if available, then the --hub-url flag.
+            target_hub = args.hub_url_pos or args.hub_url
+            
+            if target_hub:
+                target_hub = target_hub.rstrip("/")
+                logger.info(f"Starting in ADAPTIVE PROXY MODE (Primary: {target_hub})")
+                asyncio.run(run_stdio_proxy(target_hub))
             else:
                 hub_url = f"http://127.0.0.1:{port}"
+                logger.info("No remote Hub specified. Checking for local Hub...")
                 if ensure_hub_running(port):
-                    logger.info(f"Hub detected or started. Entering PROXY MODE for Hub at {hub_url}")
+                    logger.info(f"Local Hub detected. Entering PROXY MODE for {hub_url}")
                     asyncio.run(run_stdio_proxy(hub_url))
                 else:
-                    # Fallback to standalone stdio mode if Hub cannot be started
-                    logger.warning("Could not start or connect to Hub. Falling back to standalone stdio mode.")
+                    # Fallback to standalone stdio mode if no Hub can be reached or started
+                    logger.warning("No Hub available. Falling back to standalone stdio mode.")
                     mcp.run(transport="stdio")
     except Exception as e:
         import traceback
