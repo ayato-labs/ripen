@@ -13,6 +13,20 @@ def is_hub_running(port: int = 8377) -> bool:
         s.settimeout(0.5)
         return s.connect_ex(("127.0.0.1", port)) == 0
 
+def is_hub_reachable(url: str, timeout: float = 2.0) -> bool:
+    """
+    Checks if a remote Ripen Hub is reachable via HTTP.
+    url should be like 'http://1.2.3.4:8377'
+    """
+    import urllib.request
+    try:
+        # We append /dashboard/ to check if the app is actually there
+        test_url = f"{url.rstrip('/')}/dashboard/"
+        with urllib.request.urlopen(test_url, timeout=timeout) as response:
+            return response.getcode() == 200
+    except Exception:
+        return False
+
 def ensure_hub_running(port: int = 8377) -> bool:
     """
     Ensures the Ripen Hub is running. If not, starts it in the background.

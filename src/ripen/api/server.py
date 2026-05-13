@@ -74,6 +74,19 @@ from ripen.api.proxy import run_stdio_proxy
 
 logger.info("Core submodules and Dashboard router imported successfully")
 
+# --- CONNECTIVITY PROBE MIDDLEWARE ---
+class ConnectivityProbeMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            method = scope.get("method", "")
+            logger.warning(f"[PROBE] Incoming {method} {path}")
+        return await self.app(scope, receive, send)
+
+
 # --- MCP PROTOCOL PATCH: PERMISSIVE HANDSHAKE ---
 
 _original_received_request = ServerSession._received_request
@@ -143,6 +156,7 @@ def _patched_http_app(self, *args, **kwargs) -> Starlette:
     for i, m in enumerate(app.user_middleware):
         logger.info(f" Middleware {i}: {m.cls} (Bases: {getattr(m.cls, '__bases__', 'N/A')})")
 
+    app.add_middleware(ConnectivityProbeMiddleware)
     app.add_middleware(AuthMiddleware)
     # Mount Dashboard routes
     app.mount("/dashboard", dashboard_router)
@@ -163,7 +177,7 @@ async def _patched_handle_post(self, scope, receive, send):
         if match:
             session_id = match.group(1)
 
-    logger.info(f"[SSE POST] Received request for session_id={session_id}")
+    logger.warning(f"[SSE POST] Received request for session_id={session_id}")
     if not session_id:
         logger.warning("[SSE POST] REJECTED: Missing session_id")
 
@@ -484,24 +498,45 @@ def main():
                 else:
                     time.sleep(10)
         else:
-            # ADAPTIVE DISCOVERY: Try remote Hub first (if provided), then local Hub.
-            # We use the positional argument if available, then the --hub-url flag.
+            # --- ROBUST ADAPTIVE DISCOVERY ---
+            # Priority: 1. Explicit Remote Hub -> 2. Local Hub (Auto-start) -> 3. Standalone stdio
+            
             target_hub = args.hub_url_pos or args.hub_url
             
+            # 1. Clean and validate target_hub
+            is_valid_remote = False
             if target_hub:
                 target_hub = target_hub.rstrip("/")
-                logger.info(f"Starting in ADAPTIVE PROXY MODE (Primary: {target_hub})")
-                asyncio.run(run_stdio_proxy(target_hub))
-            else:
-                hub_url = f"http://127.0.0.1:{port}"
-                logger.info("No remote Hub specified. Checking for local Hub...")
-                if ensure_hub_running(port):
-                    logger.info(f"Local Hub detected. Entering PROXY MODE for {hub_url}")
-                    asyncio.run(run_stdio_proxy(hub_url))
+                # Detect placeholders like <TEAM-HUB-IP> or empty strings
+                if "<" in target_hub or "your-ip" in target_hub or not target_hub:
+                    logger.info(f"Placeholder or empty remote URL detected: '{target_hub}'. Skipping remote discovery.")
+                    target_hub = None
                 else:
-                    # Fallback to standalone stdio mode if no Hub can be reached or started
-                    logger.warning("No Hub available. Falling back to standalone stdio mode.")
-                    mcp.run(transport="stdio")
+                    is_valid_remote = True
+
+            # 2. Try Remote Hub if provided
+            if is_valid_remote:
+                logger.info(f"Attempting to connect to REMOTE HUB: {target_hub}")
+                # We use a short timeout check here to avoid hanging the agent
+                from ripen.ops.hub_manager import is_hub_reachable
+                if is_hub_reachable(target_hub, timeout=2.0):
+                    logger.info(f"Remote Hub reached. Entering ADAPTIVE PROXY MODE.")
+                    asyncio.run(run_stdio_proxy(target_hub))
+                    return
+                else:
+                    logger.warning(f"Remote Hub at {target_hub} is UNREACHABLE. Falling back to local discovery.")
+
+            # 3. Local Discovery & Auto-start
+            hub_url = f"http://127.0.0.1:{port}"
+            logger.info("Probing for local Ripen Hub (127.0.0.1)...")
+            if ensure_hub_running(port):
+                logger.info(f"Local Hub is active. Connecting via PROXY MODE to {hub_url}")
+                asyncio.run(run_stdio_proxy(hub_url))
+            else:
+                # 4. Ultimate Fallback: Standalone stdio
+                logger.warning("No Hub (Remote or Local) available. Falling back to standalone stdio mode.")
+                logger.info("Hint: In standalone mode, memory is local to this process and not shared with a persistent Hub.")
+                mcp.run(transport="stdio")
     except Exception as e:
         import traceback
         logger.critical(f"FATAL SERVER ERROR: {e}")
