@@ -3,7 +3,7 @@ from typing import Any
 import aiosqlite
 
 from ripen.infra.database import AsyncSQLiteConnection, get_write_semaphore, init_db
-from ripen.infra.repository import (
+from ripen.infra.repos import (
     AuditRepository,
     BankRepository,
     ConflictRepository,

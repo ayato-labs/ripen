@@ -332,6 +332,10 @@ class IThoughtRepository(ABC):
     async def get_total_session_count(self) -> int:
         pass
 
+    @abstractmethod
+    async def search_thoughts(self, fts_query: str, exclude_session_id: str) -> list[dict[str, Any]]:
+        pass
+
 
 class IManagementRepository(ABC):
     @abstractmethod
