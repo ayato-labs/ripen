@@ -6,20 +6,21 @@ echo.
 echo [Ripen Client] Connect to Remote Team Hub
 echo ----------------------------------------
 
-set /p HUB_URL="Enter the Ripen Hub URL (e.g. http://192.168.1.50:8377): "
+set /p HUB_URL="Enter Hub URL (default: http://localhost:8377): "
 
 if "%HUB_URL%"=="" (
-    echo Error: Hub URL is required.
-    pause
-    exit /b 1
+    set HUB_URL=http://localhost:8377
 )
 
 echo.
 echo Connecting to %HUB_URL% via Stdio Proxy...
-echo (Keep this window open while using your AI Agent)
 echo.
 
 uv run ripen --stdio --hub-url %HUB_URL%
 
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo [ERROR] Proxy connection failed.
+    pause
+)
 popd
-pause

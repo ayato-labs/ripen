@@ -1,13 +1,17 @@
 @echo off
 pushd "%~dp0.."
 echo.
-echo [Ripen Proxy] Starting Local Stdio Proxy...
+echo [Ripen Hub] Starting Local Stdio Server...
 echo ----------------------------------------
-echo This process will bridge stdio to the central Ripen Hub.
-echo It will auto-start a local Hub if one isn't running.
+echo Communication: Standard I/O (STDIO)
+echo Use this mode for direct MCP integration.
 echo.
 
 uv run ripen --stdio
 
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo [ERROR] Server exited with code %ERRORLEVEL%
+    pause
+)
 popd
-pause

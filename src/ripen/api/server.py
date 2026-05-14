@@ -242,6 +242,7 @@ def main():
     parser.add_argument("--port", type=int, help="Port for SSE mode")
     parser.add_argument("--host", default="0.0.0.0", help="Host for SSE mode")
     parser.add_argument("--dev", action="store_true", help="Start in development mode")
+    parser.add_argument("--hub-url", dest="hub_url", help="Hub URL (for Proxy mode)")
     parser.add_argument("hub_url_pos", type=str, nargs="?", help="Hub URL (for Proxy mode)")
 
     args = parser.parse_args()
@@ -272,7 +273,7 @@ def main():
         mcp.run(transport="sse", host=args.host, port=port)
     else:
         # STDIO mode: Check if we should run as a proxy or native server
-        target_hub = args.hub_url_pos
+        target_hub = args.hub_url or args.hub_url_pos
         if target_hub and "<" not in target_hub:
             logger.info(f"Starting STDIO Proxy -> {target_hub}")
             asyncio.run(run_stdio_proxy(target_hub))
