@@ -272,7 +272,7 @@ class Settings:
 
     @property
     def hashtag_ai_threshold(self) -> int:
-        """AIによるハッシュタグ抽出を行う閾値（文字数）。"""
+        """AIによるハッシュタグ抽出を行う閾値(文字数)。"""
         return int(self.get("HASHTAG_AI_THRESHOLD", "100"))
 
     @property

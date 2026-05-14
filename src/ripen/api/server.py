@@ -16,7 +16,7 @@ from ripen.api.licensing import LicenseManager
 from ripen.api.proxy import run_stdio_proxy
 from ripen.common.config import settings
 from ripen.common.plugins import PluginLoader
-from ripen.common.tasks import create_background_task
+from ripen.common.tasks import create_background_task, wait_for_background_tasks as _wait_tasks
 from ripen.common.utils import configure_logging, get_logger, safe_main_executor
 from ripen.infra.database import init_db
 from ripen.infra.llm import get_llm_provider
@@ -285,6 +285,9 @@ def main():
     port = args.port or settings.sse_port or 8377
 
     if use_sse:
+        # Kill any zombie process on the target port (Windows specific stability fix)
+        _kill_port_process(port)
+
         # Load plugins before starting
         PluginLoader().load_all()
         print_banner("SSE (Server-Sent Events)", port)
@@ -300,6 +303,42 @@ def main():
             PluginLoader().load_all()
             print_banner("STDIO (Standard I/O)", 0)
             mcp.run(transport="stdio")
+
+
+def _kill_port_process(port: int):
+    """
+    Attempts to kill any process listening on the specified port.
+    This is a stability fix for Windows where zombie processes can hold ports.
+    """
+    if sys.platform != "win32":
+        return
+
+    try:
+        import subprocess
+
+        # Find PID using netstat
+        cmd = f"netstat -ano | findstr :{port}"
+        output = subprocess.check_output(cmd, shell=True).decode()
+        for line in output.strip().split("\n"):
+            if "LISTENING" in line:
+                parts = line.strip().split()
+                if not parts:
+                    continue
+                pid = parts[-1]
+                logger.warning(f"Killing zombie process {pid} on port {port}")
+                subprocess.run(["taskkill", "/F", "/PID", pid], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        # This usually means no process was found on that port, which is fine
+        pass
+    except Exception as e:
+        logger.error(f"Failed to kill zombie process on port {port}: {e}")
+
+
+async def wait_for_background_tasks(timeout: float = 5.0):
+    """
+    Waits for all registered background tasks to complete or timeout.
+    """
+    await _wait_tasks(timeout=timeout)
 
 if __name__ == "__main__":
     safe_main_executor(main)()

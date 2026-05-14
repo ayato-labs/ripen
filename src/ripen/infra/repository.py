@@ -661,6 +661,15 @@ class ThoughtRepository(BaseSQLiteRepository, IThoughtRepository):
         row = await cursor.fetchone()
         return row[0] or 0
 
+    async def search_thoughts(self, fts_query: str, exclude_session_id: str) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute(
+            "SELECT session_id, thought_number, thought, bm25(thought_history_fts) "
+            "FROM thought_history_fts WHERE thought_history_fts MATCH ? "
+            "AND session_id != ?",
+            (fts_query, exclude_session_id),
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
 
 class ManagementRepository(BaseSQLiteRepository, IManagementRepository):
     async def get_table_info(self) -> list[dict[str, Any]]:

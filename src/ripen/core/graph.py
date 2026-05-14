@@ -10,19 +10,8 @@ from ripen.common.utils import (
     log_error,
     mask_sensitive_data,
 )
-
 from ripen.infra.embeddings import compute_embeddings_bulk
 from ripen.infra.llm import get_llm_provider
-from ripen.infra.repository import (
-    AuditRepository,
-    ConflictRepository,
-    EmbeddingRepository,
-    EntityRepository,
-    GraphRepository,
-    ObservationRepository,
-    RelationRepository,
-    TagRepository,
-)
 
 logger = get_logger("graph")
 

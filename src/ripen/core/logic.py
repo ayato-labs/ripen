@@ -3,17 +3,13 @@ import json
 import time
 from typing import Any
 
-import aiosqlite
-
 from ripen.common.utils import get_logger, normalize_text
 from ripen.core import bank, graph, search
 from ripen.infra.database import (
-    get_write_semaphore,
     init_db,
     retry_on_db_lock,
 )
 from ripen.infra.embeddings import compute_embeddings_bulk
-from ripen.infra.repository import TroubleshootingRepository
 from ripen.ops import health, lifecycle, management
 from ripen.ops.insights import InsightEngine
 
