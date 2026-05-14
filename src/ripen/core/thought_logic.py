@@ -169,7 +169,9 @@ async def process_thought_core(
                         timeout=15.0
                     )
                 except asyncio.TimeoutError:
-                    logger.warning(f"Salvage timed out for session {session_id}. Proceeding without it.")
+                    logger.warning(
+                        f"Salvage timed out for session {session_id}. Proceeding without it."
+                    )
                     related_knowledge = []
                 except Exception as e:
                     logger.error(f"Salvage failed for session {session_id}: {e}")
@@ -191,8 +193,10 @@ async def process_thought_core(
                         # Auto-distillation is heavier, give it 60 seconds
                         logger.info(f"Triggering final distillation for session {session_id}...")
                         await asyncio.wait_for(
-                            auto_distill_knowledge(session_id, [*history, {"thought": masked_thought}]),
-                            timeout=60.0
+                            auto_distill_knowledge(
+                                session_id, [*history, {"thought": masked_thought}]
+                            ),
+                            timeout=60.0,
                         )
                     except asyncio.TimeoutError:
                         logger.error(f"Final distillation timed out for session {session_id}.")

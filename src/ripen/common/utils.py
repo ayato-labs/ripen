@@ -43,7 +43,7 @@ def configure_logging():
 
     logger.remove()
 
-    # 1. Stderr (Development)
+    # 1. Stderr (Development / Human-readable)
     stderr_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
         "<level>{level:7}</level> | "
@@ -68,12 +68,12 @@ def configure_logging():
             log_dir = Path(os.path.expanduser("~")) / ".ripen" / "logs"
     else:
         # Development mode: Use project root (Ripen-free/logs)
-        # utils.py is in src/ripen/common/utils.py -> parents[3] is Ripen-free
         log_dir = Path(__file__).parents[3] / "logs"
 
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # 2. Isolated Error Log (Quarantine)
+    # Only stores ERROR and higher, separate from main logs
     logger.add(
         log_dir / "error.log",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:7} | {name}:{function}:{line} - {message}",
@@ -93,6 +93,8 @@ def configure_logging():
         return
 
     # 3. Main Structured JSON log (Traceability)
+    # Keeping only last 2 executions via retention=2
+    # Filename includes date/time to distinguish runs
     logger.add(
         log_dir / "server_{time:YYYY-MM-DD_HH-mm-ss}.jsonl",
         format="{message}",
@@ -122,8 +124,7 @@ def log_info(msg: str):
 def log_error(msg: str, error: Exception | None = None):
     """Abstraction for logging error messages with optional exception details."""
     if error:
-        # Use loguru's native formatting or just pass msg
-        # to avoid KeyError on braces in error string
+        # Use loguru's native formatting
         logger.opt(exception=error).error(msg)
     else:
         logger.error(msg)
@@ -380,24 +381,25 @@ def safe_main_executor(main_func):
     Executes a main function with error handling and a terminal pause.
     Prevents the terminal window from closing immediately on error or exit.
     """
+
     def wrapper(*args, **kwargs):
         try:
             return main_func(*args, **kwargs)
         except Exception as e:
             logger.exception("FATAL ERROR: Application crashed.")
-            # Check if running in an interactive terminal
-            # sys.stdin.isatty() is True if it's a real terminal
-            if sys.stdin and sys.stdin.isatty() and sys.stdout and sys.stdout.isatty():
-                print("\n" + "!" * 60)
-                print("  FATAL ERROR OCCURRED")
-                print(f"  {e}")
-                print("!" * 60)
-                try:
-                    input("\nPress Enter to exit...")
-                except EOFError:
-                    pass
+            # Ensure the terminal doesn't close abruptly
+            print("\n" + "!" * 60)
+            print("  FATAL ERROR OCCURRED")
+            print(f"  {type(e).__name__}: {e}")
+            print("  Check logs/error.log for full traceback.")
+            print("!" * 60)
+            try:
+                input("\nPress [Enter] to close the terminal...")
+            except (EOFError, KeyboardInterrupt):
+                pass
             sys.exit(1)
         except KeyboardInterrupt:
             # Usually we don't want to pause on Ctrl+C, just exit quietly
             sys.exit(0)
+
     return wrapper

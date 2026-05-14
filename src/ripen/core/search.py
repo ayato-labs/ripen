@@ -10,28 +10,18 @@ from ripen.common.utils import (
     get_logger,
     log_error,
 )
-from ripen.core.bank import read_bank_data
-from ripen.core.graph import get_graph_data
-
 from ripen.infra.embeddings import compute_embedding
 from ripen.infra.llm import get_llm_provider
-from ripen.infra.repository import (
-    BankRepository,
-    EntityRepository,
-    MetadataRepository,
-    ObservationRepository,
-    RelationRepository,
-    SearchRepository,
-    TagRepository,
-    ThoughtRepository,
-    TroubleshootingRepository,
-)
 
 logger = get_logger("search")
 
 
 async def perform_keyword_search(
-    uow, query: str, limit: int = 5, exclude_session_id: str = None, include_transient: bool = True
+    uow,
+    query: str,
+    limit: int = 5,
+    exclude_session_id: str | None = None,
+    include_transient: bool = True,
 ):
     """
     Improved Keyword Search Logic using FTS5 and maturity-based scoring.
@@ -171,7 +161,10 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
         keyword_results = await task_keyword
 
         if not query_vector or not all_rows:
-            logger.warning(f"No search context available. query_vector={bool(query_vector)}, all_rows={len(all_rows) if all_rows else 0}")
+            logger.debug(
+                f"Embed search skipped or not available. "
+                f"query_vector={bool(query_vector)}, all_rows={len(all_rows) if all_rows else 0}"
+            )
             return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
 
         all_cids = [r["content_id"] for r in all_rows]
@@ -344,4 +337,4 @@ async def synthesize_entity_detailed(entity_name: str, observations: list[dict])
         return summary
     except Exception as e:
         logger.error(f"Synthesis failed: {e}")
-        return f"[Synthesis Error] {str(e)}"
+        return f"[Synthesis Error] {e!s}"

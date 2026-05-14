@@ -1,8 +1,9 @@
+import socket
 import subprocess
 import sys
 import time
-import socket
 from pathlib import Path
+
 from ripen.common.utils import get_logger
 
 logger = get_logger("hub_manager")
@@ -57,9 +58,9 @@ def ensure_hub_running(port: int = 8377) -> bool:
         # Clear previous startup log
         if startup_log_path.exists():
             try:
-                startup_log_path.unlink()
-            except:
-                pass
+                startup_log_path.unlink(missing_ok=True)
+            except OSError as e:
+                logger.warning(f"Could not clear previous startup log: {e}")
                 
         logger.info(f"Background Hub logs will be written to: {startup_log_path}")
         
@@ -84,7 +85,7 @@ def ensure_hub_running(port: int = 8377) -> bool:
             popen_kwargs["start_new_session"] = True
             
         logger.debug(f"Running background command: {' '.join(cmd)}")
-        process = subprocess.Popen(cmd, **popen_kwargs)
+        subprocess.Popen(cmd, **popen_kwargs)
         
         # Wait for Hub to be ready
         retries = 0

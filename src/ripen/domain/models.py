@@ -1,7 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
 
 
 class KnowledgeStatus(Enum):
@@ -28,8 +27,8 @@ class Entity:
     description: str = ""
     importance: int = 1
     status: KnowledgeStatus = KnowledgeStatus.ACTIVE
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -39,7 +38,7 @@ class Relation:
     predicate: str
     agent_id: str = "default"
     status: KnowledgeStatus = KnowledgeStatus.ACTIVE
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -48,7 +47,7 @@ class Observation:
     content: str
     agent_id: str = "default"
     status: KnowledgeStatus = KnowledgeStatus.ACTIVE
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -56,4 +55,4 @@ class BankFile:
     filename: str
     content: str
     status: KnowledgeStatus = KnowledgeStatus.ACTIVE
-    last_synced: Optional[datetime] = None
+    last_synced: datetime | None = None

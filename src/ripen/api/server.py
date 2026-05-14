@@ -4,27 +4,23 @@ import json
 import os
 import signal
 import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Any, AsyncGenerator
 
 from fastmcp import FastMCP
-from loguru import logger
+from loguru import logger as base_logger
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import Response
 
 from ripen.api.dashboard import router as dashboard_router
 from ripen.api.licensing import LicenseManager
+from ripen.api.proxy import run_stdio_proxy
 from ripen.common.config import settings
 from ripen.common.plugins import PluginLoader
-from ripen.common.tasks import create_background_task, wait_for_background_tasks
+from ripen.common.tasks import create_background_task
 from ripen.common.utils import configure_logging, get_logger, safe_main_executor
-from ripen.ops.lifecycle import start_database_maintenance
 from ripen.infra.database import init_db
 from ripen.infra.llm import get_llm_provider
-from ripen.api.proxy import run_stdio_proxy
-from ripen.ops.hub_manager import ensure_hub_running
+from ripen.ops.lifecycle import start_database_maintenance
 
 async def ensure_initialized():
     """Legacy helper for tests and external scripts."""
@@ -33,9 +29,9 @@ async def ensure_initialized():
 
 # Import core modules
 from ripen.core import (
+    bank as bank_module,
     graph as graph_module,
     logic as logic_module,
-    search as search_module,
     thought_logic as thought_module,
 )
 
@@ -205,10 +201,11 @@ async def manage_knowledge_activation(ids: list[str] | str, status: str) -> str:
     return f"Status updated to {status}."
 
 @mcp.tool()
-async def list_inactive_knowledge() -> str:
-    """List archived or low-maturity knowledge. Use this to review what has been filtered out and identify if any critical information needs to be 're-activated'."""
-    results = await logic_module.list_inactive_knowledge_core()
-    return json.dumps(results, indent=2, ensure_ascii=False)
+async def list_inactive_knowledge() -> list[dict]:
+    """List archived or low-maturity knowledge.
+    Use this to review what has been filtered out and identify if any critical
+    information needs to be 're-activated'."""
+    return await logic_module.list_inactive_knowledge_core()
 
 @mcp.tool()
 async def get_insights(format: str = "markdown") -> str:
@@ -217,7 +214,8 @@ async def get_insights(format: str = "markdown") -> str:
 
 @mcp.tool()
 async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False) -> str:
-    """System maintenance: Garbage collection. Trigger this to purge ancient, unused knowledge and maintain system performance."""
+    """System maintenance: Garbage collection.
+    Trigger this to purge ancient, unused knowledge and maintain system performance."""
     return await logic_module.admin_run_knowledge_gc_core(age_days, dry_run)
 
 # --- MCP PROTOCOL PATCH ---
