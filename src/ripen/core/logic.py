@@ -155,10 +155,14 @@ async def save_memory_core(
             raise RuntimeError(f"Critical Error: Could not initialize database: {e}") from e
 
         # --- Normalization ---
+        local_logger.debug("Normalizing inputs...")
         entities = normalize_entities(entities)
         observations = normalize_observations(observations)
         relations = relations or []
         bank_files = normalize_bank_files(bank_files)
+        local_logger.debug(
+            f"Normalization complete: {len(entities)} entities, {len(observations)} obs"
+        )
 
         # --- Phase 1: Pre-compute AI results ---
         start_time = time.perf_counter()
@@ -187,7 +191,9 @@ async def save_memory_core(
 
         bank_texts = [item["text"] for item in bank_file_items]
         all_embedding_texts = entity_texts + bank_texts
-        local_logger.debug(f"Prepared {len(all_embedding_texts)} embedding inputs")
+        local_logger.debug(
+            f"Prepared {len(all_embedding_texts)} embedding inputs ({len(entity_texts)} entities, {len(bank_texts)} bank)"
+        )
 
         # 1.2 Prepare Tasks
         tasks = []
@@ -374,8 +380,9 @@ async def read_memory_core(query: str | None = None) -> dict[str, Any] | str:
             if query:
                 graph_data, bank_data = await search.perform_search(query, uow)
             else:
-                graph_data = await graph.get_graph_data(uow)
-                bank_data = await bank.read_bank_data(uow)
+                # IMPORTANT: DO NOT return all data. Limit to recent 20 items.
+                graph_data = await graph.get_graph_data(uow, limit=20)
+                bank_data = await bank.read_bank_data(uow, limit=5) # Bank is also heavy
 
             duration = time.perf_counter() - start_time
             logger.info(f"read_memory_core COMPLETE query='{query}' duration={duration:.2f}s")

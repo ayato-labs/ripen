@@ -29,7 +29,11 @@ class IBankRepository(ABC):
         pass
 
     @abstractmethod
-    async def update_status(self, filename: str, status: str) -> None:
+    async def update_status(self, filenames: str | list[str], status: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_inactive_bank_files(self) -> list[dict[str, Any]]:
         pass
 
 
@@ -49,6 +53,10 @@ class IAuditRepository(ABC):
 
     @abstractmethod
     async def get_history(self, limit: int, table_name: str | None) -> list[dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    async def get_audit_log_by_id(self, audit_id: int) -> dict[str, Any] | None:
         pass
 
 
@@ -81,7 +89,11 @@ class IEntityRepository(ABC):
         pass
 
     @abstractmethod
-    async def update_status(self, name: str, status: str) -> None:
+    async def update_status(self, names: str | list[str], status: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_inactive_entities(self) -> list[dict[str, Any]]:
         pass
 
 
@@ -108,6 +120,14 @@ class IRelationRepository(ABC):
     async def update_status(self, subject: str, object: str, predicate: str, status: str) -> None:
         pass
 
+    @abstractmethod
+    async def update_status_by_entities(self, names: list[str], status: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_inactive_relations(self) -> list[dict[str, Any]]:
+        pass
+
 
 class IObservationRepository(ABC):
     @abstractmethod
@@ -130,6 +150,14 @@ class IObservationRepository(ABC):
     async def update_status(self, obs_id: int, status: str) -> None:
         pass
 
+    @abstractmethod
+    async def update_status_by_entities(self, names: list[str], status: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_inactive_observations(self) -> list[dict[str, Any]]:
+        pass
+
 
 class ISearchRepository(ABC):
     @abstractmethod
@@ -147,10 +175,6 @@ class ISearchRepository(ABC):
     async def perform_like_search(
         self, table: str, id_col: str, content_col: str, query: str
     ) -> list[dict[str, Any]]:
-        pass
-
-    @abstractmethod
-    async def get_all_embeddings(self) -> list[tuple[str, bytes]]:
         pass
 
 
@@ -171,7 +195,11 @@ class IConflictRepository(ABC):
         pass
 
     @abstractmethod
-    async def resolve_conflict(self, conflict_id: int) -> dict[str, Any] | None:
+    async def get_conflict_by_id(self, conflict_id: int) -> dict[str, Any] | None:
+        pass
+
+    @abstractmethod
+    async def mark_resolved(self, conflict_id: int) -> None:
         pass
 
 
@@ -186,6 +214,11 @@ class IEmbeddingRepository(ABC):
         self, content_hash: str, vector: list[float], model_name: str
     ) -> None:
         """Insert a new entry into the embedding cache."""
+        pass
+
+    @abstractmethod
+    async def get_all_embeddings(self) -> list[tuple[str, bytes]]:
+        """Retrieve all stored embeddings for hybrid search."""
         pass
 
 
@@ -319,4 +352,46 @@ class IManagementRepository(ABC):
 
     @abstractmethod
     async def get_creation_timestamp(self, content_id: str) -> str | None:
+        pass
+
+    @abstractmethod
+    async def get_database_stats(self) -> dict[str, Any]:
+        pass
+
+    @abstractmethod
+    async def get_embedding_model_distribution(self) -> dict[str, int]:
+        pass
+
+    @abstractmethod
+    async def get_isolated_entities(self) -> list[str]:
+        pass
+
+    @abstractmethod
+    async def get_entity_type_distribution(self) -> dict[str, int]:
+        pass
+
+    @abstractmethod
+    async def get_agent_contribution_stats(self) -> dict[str, int]:
+        pass
+
+    @abstractmethod
+    async def get_snapshot_path(self, snapshot_id: int) -> dict[str, Any] | None:
+        pass
+
+    @abstractmethod
+    async def insert_snapshot(self, name: str, description: str, file_path: str) -> None:
+        pass
+
+    @abstractmethod
+    async def list_snapshots(self) -> list[dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    async def optimize_database(self) -> None:
+        """Perform database optimization (PRAGMA optimize)."""
+        pass
+
+    @abstractmethod
+    async def get_stale_knowledge_ids(self, age_days: int) -> list[str]:
+        """Identify IDs of knowledge items that haven't been accessed recently."""
         pass

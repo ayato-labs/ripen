@@ -1,7 +1,9 @@
 import json
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import aiosqlite
+from loguru import logger
 
 from ripen.infra.repository_base import (
     IAuditRepository,
@@ -65,11 +67,22 @@ class BankRepository(BaseSQLiteRepository, IBankRepository):
         )
         return await cursor.fetchall()
 
-    async def update_status(self, filename: str, status: str) -> None:
-        await self.conn.execute(
-            "UPDATE bank_files SET status = ?, last_synced = CURRENT_TIMESTAMP WHERE filename = ?",
-            (status, filename),
+    async def update_status(self, filenames: str | list[str], status: str) -> int:
+        if isinstance(filenames, str):
+            filenames = [filenames]
+        if not filenames:
+            return 0
+        placeholders = ",".join(["?"] * len(filenames))
+        cursor = await self.conn.execute(
+            "UPDATE bank_files SET status = ?, last_synced = CURRENT_TIMESTAMP "
+            f"WHERE filename IN ({placeholders})",
+            [status, *filenames],
         )
+        return cursor.rowcount
+
+    async def get_inactive_bank_files(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM bank_files WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
 
 
 class AuditRepository(BaseSQLiteRepository, IAuditRepository):
@@ -85,12 +98,14 @@ class AuditRepository(BaseSQLiteRepository, IAuditRepository):
     ) -> None:
         if meta_data:
             await self.conn.execute(
-                "INSERT INTO audit_logs (table_name, content_id, action, old_data, new_data, agent_id, meta_data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO audit_logs (table_name, content_id, action, old_data, "
+                "new_data, agent_id, meta_data) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (table_name, content_id, action, old_data, new_data, agent_id, meta_data),
             )
         else:
             await self.conn.execute(
-                "INSERT INTO audit_logs (table_name, content_id, action, old_data, new_data, agent_id) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO audit_logs (table_name, content_id, action, old_data, "
+                "new_data, agent_id) VALUES (?, ?, ?, ?, ?, ?)",
                 (table_name, content_id, action, old_data, new_data, agent_id),
             )
 
@@ -102,8 +117,13 @@ class AuditRepository(BaseSQLiteRepository, IAuditRepository):
             params.append(table_name)
         query += "ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
-        cursor = await self.conn.execute(query, params)
+        cursor = await self.conn.execute(query, tuple(params))
         return [dict(r) for r in await cursor.fetchall()]
+
+    async def get_audit_log_by_id(self, audit_id: int) -> dict[str, Any] | None:
+        cursor = await self.conn.execute("SELECT * FROM audit_logs WHERE id = ?", (audit_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
 
 class EntityRepository(BaseSQLiteRepository, IEntityRepository):
@@ -127,7 +147,8 @@ class EntityRepository(BaseSQLiteRepository, IEntityRepository):
         agent_id: str,
     ) -> None:
         await self.conn.execute(
-            "INSERT OR REPLACE INTO entities (name, entity_type, description, importance, updated_by) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO entities (name, entity_type, description, "
+            "importance, updated_by) VALUES (?, ?, ?, ?, ?)",
             (name, entity_type, description, importance, agent_id),
         )
 
@@ -147,11 +168,22 @@ class EntityRepository(BaseSQLiteRepository, IEntityRepository):
         )
         return [dict(r) for r in await cursor.fetchall()]
 
-    async def update_status(self, name: str, status: str) -> None:
-        await self.conn.execute(
-            "UPDATE entities SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-            (status, name),
+    async def update_status(self, names: str | list[str], status: str) -> int:
+        if isinstance(names, str):
+            names = [names]
+        if not names:
+            return 0
+        placeholders = ",".join(["?"] * len(names))
+        cursor = await self.conn.execute(
+            "UPDATE entities SET status = ?, updated_at = CURRENT_TIMESTAMP "
+            f"WHERE name IN ({placeholders})",
+            [status, *names],
         )
+        return cursor.rowcount
+
+    async def get_inactive_entities(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM entities WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
 
 
 class RelationRepository(BaseSQLiteRepository, IRelationRepository):
@@ -195,6 +227,21 @@ class RelationRepository(BaseSQLiteRepository, IRelationRepository):
             (status, subject, object, predicate),
         )
 
+    async def update_status_by_entities(self, names: list[str], status: str) -> int:
+        if not names:
+            return 0
+        placeholders = ",".join(["?"] * len(names))
+        cursor = await self.conn.execute(
+            "UPDATE relations SET status = ? "
+            f"WHERE subject IN ({placeholders}) OR object IN ({placeholders})",
+            [status, *names, *names],
+        )
+        return cursor.rowcount
+
+    async def get_inactive_relations(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM relations WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
+
 
 class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
     async def get_recent_observations(self, entity_name: str, limit: int = 5) -> list[str]:
@@ -235,6 +282,20 @@ class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
             (status, obs_id),
         )
 
+    async def update_status_by_entities(self, names: list[str], status: str) -> int:
+        if not names:
+            return 0
+        placeholders = ",".join(["?"] * len(names))
+        cursor = await self.conn.execute(
+            f"UPDATE observations SET status = ? WHERE entity_name IN ({placeholders})",
+            [status, *names],
+        )
+        return cursor.rowcount
+
+    async def get_inactive_observations(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute("SELECT * FROM observations WHERE status != 'active'")
+        return [dict(r) for r in await cursor.fetchall()]
+
 
 class ConflictRepository(BaseSQLiteRepository, IConflictRepository):
     async def insert_conflict(
@@ -255,15 +316,13 @@ class ConflictRepository(BaseSQLiteRepository, IConflictRepository):
         cursor = await self.conn.execute("SELECT * FROM conflicts WHERE resolved = 0")
         return [dict(r) for r in await cursor.fetchall()]
 
-    async def resolve_conflict(self, conflict_id: int) -> dict[str, Any] | None:
+    async def get_conflict_by_id(self, conflict_id: int) -> dict[str, Any] | None:
         cursor = await self.conn.execute("SELECT * FROM conflicts WHERE id = ?", (conflict_id,))
         row = await cursor.fetchone()
-        if row:
-            await self.conn.execute(
-                "UPDATE conflicts SET resolved = 1 WHERE id = ?", (conflict_id,)
-            )
-            return dict(row)
-        return None
+        return dict(row) if row else None
+
+    async def mark_resolved(self, conflict_id: int) -> None:
+        await self.conn.execute("UPDATE conflicts SET resolved = 1 WHERE id = ?", (conflict_id,))
 
 
 class EmbeddingRepository(BaseSQLiteRepository, IEmbeddingRepository):
@@ -292,6 +351,16 @@ class EmbeddingRepository(BaseSQLiteRepository, IEmbeddingRepository):
             (content_hash, json.dumps(vector), model_name),
         )
 
+    async def get_all_embeddings(self) -> list[tuple[str, bytes]]:
+        cursor = await self.conn.execute("""
+            SELECT e.content_id, e.vector
+            FROM embeddings e
+            LEFT JOIN entities ent ON e.content_id = ent.name
+            LEFT JOIN bank_files bf ON e.content_id = bf.filename
+            WHERE (ent.status = 'active' OR bf.status = 'active')
+        """)
+        return await cursor.fetchall()
+
 
 class TroubleshootingRepository(BaseSQLiteRepository, ITroubleshootingRepository):
     async def insert_troubleshooting(
@@ -299,7 +368,8 @@ class TroubleshootingRepository(BaseSQLiteRepository, ITroubleshootingRepository
     ) -> None:
         await self.conn.execute(
             """
-            INSERT INTO troubleshooting_knowledge (title, solution, affected_functions, env_metadata)
+            INSERT INTO troubleshooting_knowledge 
+            (title, solution, affected_functions, env_metadata)
             VALUES (?, ?, ?, ?)
             """,
             (title, solution, affected_functions, env_metadata),
@@ -418,20 +488,10 @@ class SearchRepository(BaseSQLiteRepository, ISearchRepository):
     ) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             f"SELECT {id_col}, {content_col} FROM {table} "
-            f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?) AND (status = 'active' OR 1=1)",
+            f"WHERE ({content_col} LIKE ? OR {id_col} LIKE ?)",
             (f"%{query}%", f"%{query}%"),
         )
         return [dict(r) for r in await cursor.fetchall()]
-
-    async def get_all_embeddings(self) -> list[tuple[str, bytes]]:
-        cursor = await self.conn.execute("""
-            SELECT e.content_id, e.vector
-            FROM embeddings e
-            LEFT JOIN entities ent ON e.content_id = ent.name
-            LEFT JOIN bank_files bf ON e.content_id = bf.filename
-            WHERE (ent.status = 'active' OR bf.status = 'active')
-        """)
-        return await cursor.fetchall()
 
 
 class MetadataRepository(BaseSQLiteRepository, IMetadataRepository):
@@ -599,9 +659,13 @@ class ManagementRepository(BaseSQLiteRepository, IManagementRepository):
         tables = [r[0] for r in await cursor.fetchall()]
         results = []
         for table in tables:
-            c = await self.conn.execute(f"SELECT COUNT(*) FROM {table}")
-            count = (await c.fetchone())[0]
-            results.append({"name": table, "count": count})
+            try:
+                c = await self.conn.execute(f"SELECT COUNT(*) FROM {table}")
+                count = (await c.fetchone())[0]
+                results.append({"name": table, "count": count})
+            except Exception as e:
+                logger.warning(f"Failed to get count for table {table}: {e}")
+                continue
         return results
 
     async def vacuum_into(self, target_path: str) -> None:
@@ -620,9 +684,13 @@ class ManagementRepository(BaseSQLiteRepository, IManagementRepository):
         return self.conn.total_changes
 
     async def get_count(self, table_name: str) -> int:
-        cursor = await self.conn.execute(f"SELECT COUNT(*) FROM {table_name}")
-        row = await cursor.fetchone()
-        return row[0] or 0
+        try:
+            cursor = await self.conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+            row = await cursor.fetchone()
+            return row[0] or 0
+        except Exception as e:
+            logger.warning(f"Failed to get count for table {table_name}: {e}")
+            return 0
 
     async def get_creation_timestamp(self, content_id: str) -> str | None:
         query = (
@@ -633,3 +701,94 @@ class ManagementRepository(BaseSQLiteRepository, IManagementRepository):
         cursor = await self.conn.execute(query, (content_id, content_id))
         row = await cursor.fetchone()
         return row[0] if row else None
+
+    async def get_database_stats(self) -> dict[str, Any]:
+        stats = {}
+        cursor = await self.conn.execute("PRAGMA page_count")
+        stats["page_count"] = (await cursor.fetchone())[0]
+        cursor = await self.conn.execute("PRAGMA page_size")
+        stats["page_size"] = (await cursor.fetchone())[0]
+        cursor = await self.conn.execute("PRAGMA freelist_count")
+        stats["freelist_count"] = (await cursor.fetchone())[0]
+        cursor = await self.conn.execute("PRAGMA journal_mode")
+        stats["journal_mode"] = (await cursor.fetchone())[0]
+
+        stats["fragmentation_ratio"] = (
+            stats["freelist_count"] / stats["page_count"] if stats["page_count"] > 0 else 0
+        )
+        stats["wal_mode"] = stats["journal_mode"].lower() == "wal"
+        return stats
+
+    async def get_embedding_model_distribution(self) -> dict[str, int]:
+        cursor = await self.conn.execute(
+            "SELECT model_name, COUNT(*) FROM embeddings GROUP BY model_name"
+        )
+        rows = await cursor.fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    async def get_isolated_entities(self) -> list[str]:
+        # Entities not present in relations as subject or object
+        query = """
+            SELECT name FROM entities 
+            WHERE status = 'active'
+            AND name NOT IN (SELECT DISTINCT subject FROM relations WHERE status = 'active')
+            AND name NOT IN (SELECT DISTINCT object FROM relations WHERE status = 'active')
+        """
+        cursor = await self.conn.execute(query)
+        rows = await cursor.fetchall()
+        return [r[0] for r in rows]
+
+    async def get_entity_type_distribution(self) -> dict[str, int]:
+        cursor = await self.conn.execute(
+            "SELECT entity_type, COUNT(*) FROM entities "
+            "WHERE status = 'active' GROUP BY entity_type"
+        )
+        rows = await cursor.fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    async def get_agent_contribution_stats(self) -> dict[str, int]:
+        # Aggregating from entities and observations
+        query = """
+            SELECT created_by, COUNT(*) FROM (
+                SELECT created_by FROM entities
+                UNION ALL
+                SELECT created_by FROM observations
+            ) GROUP BY created_by
+        """
+        cursor = await self.conn.execute(query)
+        rows = await cursor.fetchall()
+        return {r[0] or "unknown": r[1] for r in rows}
+
+    async def get_snapshot_path(self, snapshot_id: int) -> dict[str, Any] | None:
+        cursor = await self.conn.execute("SELECT * FROM snapshots WHERE id = ?", (snapshot_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def insert_snapshot(self, name: str, description: str, file_path: str) -> None:
+        await self.conn.execute(
+            "INSERT INTO snapshots (name, description, file_path) VALUES (?, ?, ?)",
+            (name, description, file_path),
+        )
+
+    async def list_snapshots(self) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute(
+            "SELECT id, name, timestamp FROM snapshots ORDER BY timestamp DESC"
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def optimize_database(self) -> None:
+        await self.conn.execute("PRAGMA optimize")
+        await self.conn.execute("ANALYZE")
+
+    async def get_stale_knowledge_ids(self, age_days: int) -> list[str]:
+        # Consider knowledge stale if it hasn't been accessed for age_days
+        # and has low importance.
+        query = """
+            SELECT content_id FROM knowledge_metadata
+            WHERE last_accessed < date('now', ?)
+            AND access_count < 5
+        """
+        cursor = await self.conn.execute(query, (f"-{age_days} days",))
+        rows = await cursor.fetchall()
+        return [r[0] for r in rows]

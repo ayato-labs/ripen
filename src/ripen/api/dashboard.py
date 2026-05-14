@@ -29,8 +29,8 @@ async def get_dashboard_html(request):
 async def api_history(request):
     limit = int(request.query_params.get("limit", 20))
     async with UnitOfWork() as uow:
-        # Corrected order: (limit, table_name, uow)
-        history = await management.get_audit_history_logic(limit, None, uow)
+        # Use explicit keyword arguments to avoid positional mismatch
+        history = await management.get_audit_history_logic(limit=limit, table_name=None, uow=uow)
     return JSONResponse(history)
 
 
@@ -53,15 +53,62 @@ async def api_resolve_conflict(request):
 async def api_health(request):
     llm = get_llm_provider()
     llm_ok = await llm.check_health()
-    
+
     from ripen.common.config import settings
+
     vector_ok = await check_embeddings_health()
-    
-    return JSONResponse({
-        "llm": {"status": "ok" if llm_ok else "failed", "provider": llm.__class__.__name__},
-        "vector": {"status": "ok" if vector_ok else "failed", "engine": settings.embedding_engine},
-        "system": "online"
-    })
+
+    from ripen.api.licensing import LicenseManager
+    lm = LicenseManager()
+    is_licensed = lm.validate_locally()
+    license_info = lm.get_status_summary()
+
+    return JSONResponse(
+        {
+            "llm": {"status": "ok" if llm_ok else "failed", "provider": llm.__class__.__name__},
+            "vector": {
+                "status": "ok" if vector_ok else "failed",
+                "engine": settings.embedding_engine,
+            },
+            "license": {
+                "status": "active" if is_licensed else "trial",
+                "summary": license_info
+            },
+            "system": "online",
+        }
+    )
+
+
+async def api_activate_license(request):
+    try:
+        from ripen.common.config import settings
+        from ripen.api.licensing import LicenseManager
+
+        body = await request.json()
+        key_content = body.get("key")
+        if not key_content:
+            return JSONResponse({"status": "error", "message": "No key content provided"}, status_code=400)
+
+        lm = LicenseManager()
+
+        # Save temp file to activate
+        temp_path = settings.base_dir / "temp_dashboard_license.rpn"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(key_content.strip())
+
+        success = lm.activate(temp_path)
+        if temp_path.exists():
+            os.remove(temp_path)
+
+        if success:
+            return JSONResponse({"status": "success", "message": "License activated successfully!"})
+        else:
+            return JSONResponse(
+                {"status": "error", "message": "Invalid license key or signature verification failed."},
+                status_code=400,
+            )
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 
 router = Router(
@@ -71,5 +118,6 @@ router = Router(
         Route("/api/conflicts", api_conflicts, methods=["GET"]),
         Route("/api/resolve/{id:int}", api_resolve_conflict, methods=["POST"]),
         Route("/api/health", api_health, methods=["GET"]),
+        Route("/api/license/activate", api_activate_license, methods=["POST"]),
     ]
 )

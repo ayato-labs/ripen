@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0" }
 authors = [
-    { name = "ayato-labs", email = "contact@ayato-labs.com" }
+    { name = "ayato-labs", email = "cwblog69@gmail.com" }
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -45,6 +45,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "djlint>=1.34.0",
+    "pyinstaller>=6.0.0",
+    "pyinstaller-hooks-contrib>=2024.0",
 ]
 
 [project.urls]
@@ -72,10 +74,31 @@ package = true
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-exclude = ["scratch/"]
+src = ["src", "tests"]
+# Exclude non-relevant files
+exclude = [
+    "scratch/",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "docs",
+    "**/__pycache__",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "B", "I", "N", "UP", "PL"]
+# Selection of rules for rigorous code quality
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "B",   # flake8-bugbear
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "PL",  # pylint
+    "RUF", # ruff-specific
+    "C90", # mccabe
+]
 ignore = [
     "PLR0912", # Too many branches
     "PLR0913", # Too many arguments
@@ -84,6 +107,7 @@ ignore = [
     "PLR2004", # Magic values in comparisons
     "PLW0603", # Global statement
     "E402",    # Module level import not at top of file
+    "B008",    # Do not perform function call in argument defaults
 ]
 
 [tool.ruff.lint.isort]
