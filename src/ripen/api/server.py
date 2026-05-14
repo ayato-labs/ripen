@@ -14,7 +14,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ripen.api.auth import dashboard_router
+from ripen.api.dashboard import router as dashboard_router
 from ripen.api.licensing import LicenseManager
 from ripen.common.config import settings
 from ripen.common.plugins import PluginLoader
@@ -52,11 +52,10 @@ def get_current_user() -> str:
 mcp = FastMCP(
     "Ripen-v2",
     version="3.2.4",
-    description="The centralized knowledge hub for AI agents. Hybrid Vector + Graph memory.",
 )
 
 # Attach Dashboard
-mcp.add_router(dashboard_router, prefix="/dashboard")
+mcp.mount("/dashboard", dashboard_router)
 
 @asynccontextmanager
 async def lifespan(app: Starlette) -> AsyncGenerator[None, None]:

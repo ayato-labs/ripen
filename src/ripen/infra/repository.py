@@ -417,12 +417,21 @@ class TagRepository(BaseSQLiteRepository, ITagRepository):
 
 
 class GraphRepository(BaseSQLiteRepository, IGraphRepository):
-    async def get_full_graph(self) -> tuple[list[dict], list[dict], list[dict]]:
-        cursor = await self.conn.execute("SELECT * FROM entities WHERE status = 'active'")
+    async def get_full_graph(self, limit: int = 100) -> tuple[list[dict], list[dict], list[dict]]:
+        cursor = await self.conn.execute(
+            "SELECT * FROM entities WHERE status = 'active' LIMIT ?", (limit,)
+        )
         entities = [dict(r) for r in await cursor.fetchall()]
-        cursor = await self.conn.execute("SELECT * FROM relations WHERE status = 'active'")
+
+        cursor = await self.conn.execute(
+            "SELECT * FROM relations WHERE status = 'active' LIMIT ?", (limit,)
+        )
         relations = [dict(r) for r in await cursor.fetchall()]
-        cursor = await self.conn.execute("SELECT * FROM observations WHERE status = 'active'")
+
+        cursor = await self.conn.execute(
+            "SELECT * FROM observations WHERE status = 'active' ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        )
         observations = [dict(r) for r in await cursor.fetchall()]
         return entities, relations, observations
 

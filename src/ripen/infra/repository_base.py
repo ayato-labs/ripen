@@ -250,7 +250,7 @@ class ITagRepository(ABC):
 
 class IGraphRepository(ABC):
     @abstractmethod
-    async def get_full_graph(self) -> tuple[list[dict], list[dict], list[dict]]:
+    async def get_full_graph(self, limit: int = 100) -> tuple[list[dict], list[dict], list[dict]]:
         pass
 
     @abstractmethod
