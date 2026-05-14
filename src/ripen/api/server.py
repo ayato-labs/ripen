@@ -73,14 +73,6 @@ mcp = FastMCP(
     version="3.2.4",
 )
 
-# --- DASHBOARD MOUNT ---
-try:
-    from ripen.api.dashboard import router as dashboard_router
-    mcp.app.mount("/dashboard", dashboard_router)
-    logger.info("Dashboard mounted at /dashboard")
-except Exception as e:
-    logger.warning(f"Failed to mount dashboard: {e}")
-
 # --- MCP TOOLS ---
 
 @mcp.tool()
@@ -277,6 +269,16 @@ def main():
     if use_sse:
         # Load plugins before starting
         PluginLoader.load_all(context={"settings": settings})
+        
+        # --- DASHBOARD MOUNT ---
+        try:
+            from ripen.api.dashboard import router as dashboard_router
+            # Use name and ensure the router is mounted on the active app
+            mcp.app.mount("/dashboard", dashboard_router, name="dashboard")
+            logger.info("Dashboard mounted at /dashboard")
+        except Exception as e:
+            logger.warning(f"Failed to mount dashboard: {e}")
+
         print_banner("SSE (Server-Sent Events)", port)
         mcp.run(transport="sse", host=args.host, port=port)
     else:
