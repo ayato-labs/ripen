@@ -1,7 +1,10 @@
 from typing import Any
+
 from loguru import logger
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IManagementRepository
+
 
 class ManagementRepository(BaseSQLiteRepository, IManagementRepository):
     async def get_table_info(self) -> list[dict[str, Any]]:

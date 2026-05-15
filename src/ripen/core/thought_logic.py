@@ -57,6 +57,72 @@ async def init_thoughts_db(force: bool = False):
         logger.info("Thoughts database initialization successful (FTS5 enabled).")
 
 
+async def _validate_and_insert_thought(
+    uow,
+    session_id,
+    thought_number,
+    total_thoughts,
+    masked_thought,
+    next_thought_needed,
+    is_revision,
+    revises_thought,
+    branch_from_thought,
+    branch_id,
+    agent_id,
+):
+    """Internal helper to validate and persist a thought."""
+    history = await uow.thoughts.get_session_history(session_id)
+    existing_numbers = [h["thought_number"] for h in history]
+
+    if is_revision and revises_thought:
+        if revises_thought not in existing_numbers:
+            error_msg = (
+                f"Invalid revision: Thought #{revises_thought} "
+                f"does not exist in session '{session_id}'"
+            )
+            return {
+                "error": error_msg,
+                "thoughtNumber": thought_number,
+                "totalThoughts": total_thoughts,
+            }
+
+    if not is_revision:
+        if thought_number in existing_numbers:
+            error_msg = (
+                f"Duplicate thought number: #{thought_number} "
+                f"already exists in session '{session_id}'. "
+                "If you intended to revise, set is_revision=True."
+            )
+            logger.warning(error_msg)
+            return {
+                "error": error_msg,
+                "thoughtNumber": thought_number,
+                "totalThoughts": total_thoughts,
+            }
+
+    # 3. Persistence: Insert thought
+    meta_data = json.dumps(
+        {
+            "env": "development",
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
+    await uow.thoughts.insert_thought(
+        session_id,
+        thought_number,
+        total_thoughts,
+        masked_thought,
+        next_thought_needed,
+        is_revision,
+        revises_thought,
+        branch_from_thought,
+        branch_id,
+        agent_id,
+        meta_data,
+    )
+    return None
+
+
 @retry_on_db_lock()
 async def process_thought_core(
     thought: str,
@@ -96,45 +162,8 @@ async def process_thought_core(
             masked_thought = mask_sensitive_data(thought)
 
             async with SecureWriteContext(is_thoughts=True) as uow:
-                # 2. Validation: Check sequence integrity
-                history = await uow.thoughts.get_session_history(session_id)
-                existing_numbers = [h["thought_number"] for h in history]
-
-                if is_revision and revises_thought:
-                    if revises_thought not in existing_numbers:
-                        error_msg = (
-                            f"Invalid revision: Thought #{revises_thought} "
-                            f"does not exist in session '{session_id}'"
-                        )
-                        return {
-                            "error": error_msg,
-                            "thoughtNumber": thought_number,
-                            "totalThoughts": total_thoughts,
-                        }
-
-                if not is_revision:
-                    if thought_number in existing_numbers:
-                        error_msg = (
-                            f"Duplicate thought number: #{thought_number} "
-                            f"already exists in session '{session_id}'. "
-                            "If you intended to revise, set is_revision=True."
-                        )
-                        logger.warning(error_msg)
-                        return {
-                            "error": error_msg,
-                            "thoughtNumber": thought_number,
-                            "totalThoughts": total_thoughts,
-                        }
-
-                # 3. Persistence: Insert thought
-                t_db_start = time.perf_counter()
-                meta_data = json.dumps(
-                    {
-                        "env": "development",
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
-                await uow.thoughts.insert_thought(
+                result = await _validate_and_insert_thought(
+                    uow,
                     session_id,
                     thought_number,
                     total_thoughts,
@@ -145,9 +174,16 @@ async def process_thought_core(
                     branch_from_thought,
                     branch_id,
                     agent_id,
-                    meta_data,
                 )
+                if result and "error" in result:
+                    return result
+
+                t_db_start = time.perf_counter()
+                await uow.commit()
                 dur_db = time.perf_counter() - t_db_start
+
+                # Re-fetch history for stats (since we committed)
+                history = await uow.thoughts.get_session_history(session_id)
 
                 # 4. Statistics
                 history_length = len(history) + 1
@@ -172,7 +208,7 @@ async def process_thought_core(
                         salvage_related_knowledge(thought, session_id, history),
                         timeout=15.0
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning(
                         f"Salvage timed out for session {session_id}. Proceeding without it."
                     )
@@ -202,7 +238,7 @@ async def process_thought_core(
                             ),
                             timeout=60.0,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.error(f"Final distillation timed out for session {session_id}.")
                     except Exception as e:
                         logger.error(f"Final distillation failed for session {session_id}: {e}")

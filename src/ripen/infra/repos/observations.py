@@ -1,6 +1,8 @@
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IObservationRepository
+
 
 class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
     async def get_recent_observations(self, entity_name: str, limit: int = 5) -> list[str]:

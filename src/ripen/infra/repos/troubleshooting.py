@@ -1,6 +1,8 @@
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import ITroubleshootingRepository
+
 
 class TroubleshootingRepository(BaseSQLiteRepository, ITroubleshootingRepository):
     async def insert_troubleshooting(

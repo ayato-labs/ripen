@@ -25,7 +25,8 @@ def is_hub_reachable(url: str, timeout: float = 2.0) -> bool:
         test_url = f"{url.rstrip('/')}/dashboard/"
         with urllib.request.urlopen(test_url, timeout=timeout) as response:
             return response.getcode() == 200
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Hub reachability check failed for {url}: {e}")
         return False
 
 def ensure_hub_running(port: int = 8377) -> bool:
@@ -100,5 +101,5 @@ def ensure_hub_running(port: int = 8377) -> bool:
         return False
         
     except Exception as e:
-        logger.error(f"Failed to start Ripen Hub in background: {e}")
+        logger.error(f"Failed to start Ripen Hub in background: {e}", exc_info=True)
         return False

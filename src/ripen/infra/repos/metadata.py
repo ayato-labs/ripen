@@ -1,7 +1,9 @@
 import json
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IMetadataRepository
+
 
 class MetadataRepository(BaseSQLiteRepository, IMetadataRepository):
     async def get_all_metadata(self) -> list[dict[str, Any]]:

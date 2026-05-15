@@ -1,9 +1,16 @@
 import argparse
+import os
+import sys
+from pathlib import Path
+
+# Force prioritize local src to ensure Hub and Proxy use the same latest code
+CURRENT_SRC = str(Path(__file__).parent.parent.parent.absolute())
+if CURRENT_SRC not in sys.path:
+    sys.path.insert(0, CURRENT_SRC)
+
 import asyncio
 import json
-import os
 import signal
-import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -233,20 +240,46 @@ async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False) -> 
 
 # --- MCP PROTOCOL PATCH (DEEP TRACING) ---
 try:
-    from mcp.server.session import ServerSession
+    from mcp.server.session import ServerSession, InitializationState
+    import mcp.types as types
     _orig_received_request = ServerSession._received_request
-    async def _patched_received_request(self, request):
+
+    async def _patched_received_request(self, responder):
+        """
+        Modified MCP Protocol handler with Permissive Handshake support.
+        Automatically handles out-of-order requests and downgrades log alarms.
+        """
         try:
-            # Trace EVERY request entering the protocol layer
-            logger.debug(f"MCP_REQ_TRACE: Method={getattr(request, 'method', 'unknown')}, ID={getattr(request, 'id', 'none')}")
-            return await _orig_received_request(self, request)
+            # --- Permissive Handshake Logic ---
+            if self._initialization_state == InitializationState.NotInitialized:
+                from mcp.types import InitializeRequest, PingRequest
+                req_root = responder.request.root
+                if not isinstance(req_root, (InitializeRequest, PingRequest)):
+                    # Force transition to Initialized to prevent RuntimeError in underlying SDK
+                    logger.warning(f"Permissive Handshake: Auto-initializing session for {type(req_root).__name__}")
+                    self._initialization_state = InitializationState.Initialized
+
+            # Trace request
+            req_repr = repr(responder.request)
+            logger.debug(f"MCP_REQ_TRACE: {req_repr}")
+
+            return await _orig_received_request(self, responder)
+
+        except RuntimeError as e:
+            # Handle standard protocol state errors as warnings
+            if "before initialization was complete" in str(e):
+                logger.warning(f"MCP Protocol State Warning: {e}")
+                return # Suppress critical alarm
+            raise
         except Exception as e:
+            # Log true crashes as CRITICAL
             logger.error(f"MCP Protocol CRITICAL: Failed to process request: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            raise # Re-raise to let the system know something is wrong, instead of silent 'pass'
+            raise
+
     ServerSession._received_request = _patched_received_request
-    logger.info("MCP Protocol Patch: Deep Tracing enabled.")
+    logger.info("MCP Protocol Patch: Deep Tracing & Permissive Handshake enabled.")
 except Exception as e:
     logger.warning(f"Failed to apply MCP Protocol Patch: {e}")
 

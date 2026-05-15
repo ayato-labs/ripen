@@ -167,7 +167,8 @@ def main():
         hostname = socket.gethostname()
         try:
             local_ip = socket.gethostbyname(hostname)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not resolve local IP: {e}")
             local_ip = "YOUR_IP"
         print(
             f"\nClient Connection URL: \033[1;33mhttp://{local_ip}:{config.get('sse_port', 8377)}\033[0m"

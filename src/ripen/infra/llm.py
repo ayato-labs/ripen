@@ -1,4 +1,5 @@
 import abc
+import asyncio
 
 import httpx
 from loguru import logger
@@ -175,9 +176,9 @@ class GeminiProvider(LlmProvider):
             )
             logger.info(f"Gemini response received. Model: {model}")
             return response.text
-        except asyncio.TimeoutError:
+        except TimeoutError as e:
             logger.error(f"Gemini API call TIMEOUT (30s) - Model: {model}")
-            raise Exception("AI Brain response timed out. Please try again.")
+            raise Exception("AI Brain response timed out. Please try again.") from e
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
             raise

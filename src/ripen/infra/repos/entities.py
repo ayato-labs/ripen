@@ -1,6 +1,8 @@
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IEntityRepository
+
 
 class EntityRepository(BaseSQLiteRepository, IEntityRepository):
     async def get_all_entity_names(self) -> list[str]:

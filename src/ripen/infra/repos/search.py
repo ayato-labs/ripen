@@ -1,6 +1,8 @@
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import ISearchRepository
+
 
 class SearchRepository(BaseSQLiteRepository, ISearchRepository):
     async def perform_fts_search(

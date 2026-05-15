@@ -333,7 +333,9 @@ class IThoughtRepository(ABC):
         pass
 
     @abstractmethod
-    async def search_thoughts(self, fts_query: str, exclude_session_id: str) -> list[dict[str, Any]]:
+    async def search_thoughts(
+        self, fts_query: str, exclude_session_id: str
+    ) -> list[dict[str, Any]]:
         pass
 
 

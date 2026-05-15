@@ -33,8 +33,8 @@ def configure_logging():
     """
     Configures Loguru for structured JSON logging and traceability.
     - stderr: Human-readable colored output for development.
-    - logs/server.jsonl: Structured JSON for traceability (retains last 2 executions).
-    - logs/error.log: Isolated quarantine for ERROR and CRITICAL levels.
+    - logs/server_{time}.jsonl: Structured JSON for traceability (retains last 2 runs).
+    - logs/error.jsonl: Structured JSON quarantine for ERROR and CRITICAL levels.
     """
     global _LOGGING_CONFIGURED
 
@@ -72,19 +72,18 @@ def configure_logging():
 
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # 2. Isolated Error Log (Quarantine)
-    # Only stores ERROR and higher, separate from main logs
+    # 2. Structured Error Log (Quarantine)
+    # Only stores ERROR and higher, separate from main logs, JSON formatted
     logger.add(
-        log_dir / "error.log",
-        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:7} | {name}:{function}:{line} - {message}",
+        log_dir / "error.jsonl",
         level="ERROR",
-        serialize=False,
+        serialize=True,
         rotation="10 MB",
         retention="30 days",
         backtrace=True,
         diagnose=True,
         encoding="utf-8",
-        enqueue=False,
+        enqueue=True,
     )
 
     if "PYTEST_CURRENT_TEST" in os.environ:
@@ -97,12 +96,11 @@ def configure_logging():
     # Filename includes date/time to distinguish runs
     logger.add(
         log_dir / "server_{time:YYYY-MM-DD_HH-mm-ss}.jsonl",
-        format="{message}",
         level="DEBUG",
         serialize=True,
         retention=2,
         encoding="utf-8",
-        enqueue=False,
+        enqueue=True,
     )
 
     _LOGGING_CONFIGURED = True

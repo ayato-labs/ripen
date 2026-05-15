@@ -1,7 +1,9 @@
 from collections.abc import Sequence
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IRelationRepository
+
 
 class RelationRepository(BaseSQLiteRepository, IRelationRepository):
     async def upsert_relation(

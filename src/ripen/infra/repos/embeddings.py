@@ -1,7 +1,8 @@
 import json
-from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IEmbeddingRepository
+
 
 class EmbeddingRepository(BaseSQLiteRepository, IEmbeddingRepository):
     async def upsert_embedding(self, content_id: str, vector: list[float], model_name: str) -> None:

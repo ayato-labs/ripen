@@ -16,23 +16,7 @@ from ripen.infra.llm import get_llm_provider
 logger = get_logger("search")
 
 
-async def perform_keyword_search(
-    uow,
-    query: str,
-    limit: int = 5,
-    exclude_session_id: str | None = None,
-    include_transient: bool = True,
-):
-    """
-    Improved Keyword Search Logic using FTS5 and maturity-based scoring.
-    """
-    query_words = re.findall(r"\w+", query.lower())
-    if not query_words:
-        return []
-
-    scored_results = {}
-
-    # 1. Search Knowledge DB using FTS5 (Entities, Observations, Bank, Troubleshooting)
+async def _run_fts_keyword_search(uow, query, fts_query, scored_results):
     fts_sources = [
         (
             "troubleshooting_knowledge",
@@ -56,8 +40,6 @@ async def perform_keyword_search(
         ("bank_files", "bank_files_fts", "filename", "content", "OBSERVED", 1.0, "filename"),
     ]
 
-    fts_query = escape_fts5_query(query)
-
     for source_name, fts_table, id_col, content_col, maturity, boost, title_col in fts_sources:
         try:
             if not fts_query:
@@ -70,8 +52,8 @@ async def perform_keyword_search(
                 row_id = row[id_col]
                 content = row[content_col]
                 title = row[title_col]
-                rank = list(row.values())[-1] # bm25 result
-                
+                rank = list(row.values())[-1]  # bm25 result
+
                 score = max(0.1, abs(rank) * boost)
                 if query.lower() in str(row_id).lower() or query.lower() in str(title).lower():
                     score += 15.0
@@ -79,7 +61,8 @@ async def perform_keyword_search(
                 key = (source_name, row_id)
                 current_score, _, _ = scored_results.get(key, (0.0, "", ""))
                 scored_results[key] = (current_score + score, str(content), maturity)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"FTS search failed for {source_name}, falling back to LIKE: {e}")
             rows = await uow.search.perform_like_search(source_name, id_col, content_col, query)
             for row in rows:
                 row_id = row[id_col]
@@ -88,7 +71,8 @@ async def perform_keyword_search(
                 current_score, _, _ = scored_results.get(key, (0.0, "", ""))
                 scored_results[key] = (current_score + (2.0 * boost), str(content), maturity)
 
-    # 1.1 Search Tags (Limit to 30 to prevent flood)
+
+async def _run_tag_keyword_search(uow, query_words, scored_results):
     rows = await uow.tags.search_tags(query_words)
     for row in rows[:30]:
         cid = row["content_id"]
@@ -104,27 +88,55 @@ async def perform_keyword_search(
         current_score, content, _ = scored_results.get(key, (0.0, f"Matched tag: {tag}", maturity))
         scored_results[key] = (current_score + score, content, maturity)
 
+
+async def _run_thought_keyword_search(fts_query, exclude_session_id, scored_results):
+    try:
+        if not fts_query:
+            raise ValueError("Empty FTS query")
+
+        from ripen.infra.uow import UnitOfWork
+
+        async with UnitOfWork(is_thoughts=True) as t_uow:
+            rows = await t_uow.thoughts.search_thoughts(fts_query, exclude_session_id or "")
+            for row in rows:
+                sess_id = row["session_id"]
+                t_num = row["thought_number"]
+                thought = row["thought"]
+                rank = list(row.values())[-1]
+                score = max(0.1, abs(rank) * 0.3)
+                key = ("thought_history", f"{sess_id}#{t_num}")
+                current_score, _, _ = scored_results.get(key, (0.0, "", ""))
+                scored_results[key] = (current_score + score, str(thought), "TRANSIENT")
+    except Exception as e:
+        logger.debug(f"FTS5 thought search failed: {e}")
+
+
+async def perform_keyword_search(
+    uow,
+    query: str,
+    limit: int = 5,
+    exclude_session_id: str | None = None,
+    include_transient: bool = True,
+):
+    """
+    Improved Keyword Search Logic using FTS5 and maturity-based scoring.
+    """
+    query_words = re.findall(r"\w+", query.lower())
+    if not query_words:
+        return []
+
+    scored_results = {}
+    fts_query = escape_fts5_query(query)
+
+    # 1. Search Knowledge DB using FTS5
+    await _run_fts_keyword_search(uow, query, fts_query, scored_results)
+
+    # 1.1 Search Tags
+    await _run_tag_keyword_search(uow, query_words, scored_results)
+
     # 2. Search Thoughts DB (Transient)
     if include_transient:
-        try:
-            if not fts_query:
-                raise ValueError("Empty FTS query")
-
-            from ripen.infra.uow import UnitOfWork
-
-            async with UnitOfWork(is_thoughts=True) as t_uow:
-                rows = await t_uow.thoughts.search_thoughts(fts_query, exclude_session_id or "")
-                for row in rows:
-                    sess_id = row["session_id"]
-                    t_num = row["thought_number"]
-                    thought = row["thought"]
-                    rank = list(row.values())[-1]
-                    score = max(0.1, abs(rank) * 0.3)
-                    key = ("thought_history", f"{sess_id}#{t_num}")
-                    current_score, _, _ = scored_results.get(key, (0.0, "", ""))
-                    scored_results[key] = (current_score + score, str(thought), "TRANSIENT")
-        except Exception as e:
-            logger.debug(f"FTS5 thought search failed: {e}")
+        await _run_thought_keyword_search(fts_query, exclude_session_id, scored_results)
 
     sorted_items = sorted(scored_results.items(), key=lambda x: x[1][0], reverse=True)
     formatted_results = []

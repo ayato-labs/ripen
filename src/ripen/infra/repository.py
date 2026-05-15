@@ -1,6 +1,6 @@
-from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repos.audit import AuditRepository
 from ripen.infra.repos.bank import BankRepository
+from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repos.conflicts import ConflictRepository
 from ripen.infra.repos.embeddings import EmbeddingRepository
 from ripen.infra.repos.entities import EntityRepository
@@ -15,9 +15,9 @@ from ripen.infra.repos.thoughts import ThoughtRepository
 from ripen.infra.repos.troubleshooting import TroubleshootingRepository
 
 __all__ = [
-    "BaseSQLiteRepository",
     "AuditRepository",
     "BankRepository",
+    "BaseSQLiteRepository",
     "ConflictRepository",
     "EmbeddingRepository",
     "EntityRepository",

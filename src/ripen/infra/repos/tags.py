@@ -1,6 +1,8 @@
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import ITagRepository
+
 
 class TagRepository(BaseSQLiteRepository, ITagRepository):
     async def replace_tags(self, content_id: str, content_type: str, tags: list[str]) -> None:

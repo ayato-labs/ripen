@@ -1,6 +1,6 @@
-from typing import Any
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IGraphRepository
+
 
 class GraphRepository(BaseSQLiteRepository, IGraphRepository):
     async def get_full_graph(self, limit: int = 100) -> tuple[list[dict], list[dict], list[dict]]:

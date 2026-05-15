@@ -107,17 +107,23 @@ class AsyncSQLiteConnection:
                     if _THOUGHTS_CONNECTION is None:
                         logger.info(f"Establishing NEW thoughts singleton: {self.db_path}")
                         try:
-                            _THOUGHTS_CONNECTION = await aiosqlite.connect(self.db_path, timeout=30.0)
+                            _THOUGHTS_CONNECTION = await aiosqlite.connect(
+                                self.db_path, timeout=30.0
+                            )
                             _THOUGHTS_CONNECTION.row_factory = aiosqlite.Row
                             # --- MATURE TECH OPTIMIZATIONS ---
                             await _THOUGHTS_CONNECTION.execute("PRAGMA journal_mode = WAL")
                             await _THOUGHTS_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-                            await _THOUGHTS_CONNECTION.execute("PRAGMA mmap_size = 268435456")  # 256MB
+                            await _THOUGHTS_CONNECTION.execute(
+                                "PRAGMA mmap_size = 268435456"
+                            )  # 256MB
                             await _THOUGHTS_CONNECTION.execute("PRAGMA temp_store = MEMORY")
                             await _THOUGHTS_CONNECTION.execute("PRAGMA busy_timeout = 5000")
                             logger.info("Thoughts connection PRAGMAs configured (WAL/NORMAL/MMAP).")
                         except Exception as e:
-                            logger.error(f"CRITICAL: Failed to establish thoughts DB connection: {e}")
+                            logger.error(
+                                f"CRITICAL: Failed to establish thoughts DB connection: {e}"
+                            )
                             if _THOUGHTS_CONNECTION is not None:
                                 await _THOUGHTS_CONNECTION.close()
                                 _THOUGHTS_CONNECTION = None
@@ -237,7 +243,372 @@ async def _add_column_if_missing(cursor, table, col_def):
         raise
 
 
+async def _create_schema(cursor):
+    """Creates the initial database schema."""
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS entities (
+            name TEXT PRIMARY KEY,
+            entity_type TEXT,
+            description TEXT,
+            importance INTEGER DEFAULT 5,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT,
+            updated_by TEXT,
+            status TEXT DEFAULT 'active'
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS relations (
+            subject TEXT,
+            object TEXT,
+            predicate TEXT,
+            justification TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT,
+            status TEXT DEFAULT 'active',
+            PRIMARY KEY (subject, object, predicate)
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_name TEXT,
+            content TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT,
+            status TEXT DEFAULT 'active'
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS embedding_cache (
+            content_hash TEXT PRIMARY KEY,
+            vector BLOB,
+            model_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bank_files (
+            filename TEXT PRIMARY KEY,
+            content TEXT,
+            last_synced DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_by TEXT,
+            status TEXT DEFAULT 'active'
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS embeddings (
+            content_id TEXT PRIMARY KEY,
+            vector BLOB,
+            model_name TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS knowledge_metadata (
+            content_id TEXT PRIMARY KEY,
+            access_count INTEGER DEFAULT 0,
+            last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
+            stability REAL DEFAULT 0.1,
+            importance_score REAL DEFAULT 0.1
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT,
+            content_id TEXT,
+            action TEXT,
+            old_data TEXT,
+            new_data TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            agent_id TEXT,
+            meta_data TEXT
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            file_path TEXT NOT NULL
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conflicts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_name TEXT NOT NULL,
+            existing_content TEXT NOT NULL,
+            new_content TEXT NOT NULL,
+            reason TEXT,
+            agent_id TEXT,
+            detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolved INTEGER DEFAULT 0
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS search_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            query TEXT,
+            results_count INTEGER,
+            hit_content_ids TEXT,
+            avg_similarity REAL DEFAULT 0.0,
+            meta_data TEXT
+        )
+    """)
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tag TEXT NOT NULL,
+            content_id TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            UNIQUE(tag, content_id, content_type)
+        )
+    """)
+    await cursor.execute("CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag)")
+    await cursor.execute("CREATE INDEX IF NOT EXISTS idx_tags_content ON tags(content_id)")
+
+    await cursor.execute("""
+        CREATE TABLE IF NOT EXISTS troubleshooting_knowledge (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            solution TEXT NOT NULL,
+            affected_functions TEXT,
+            env_metadata TEXT,
+            access_count INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+async def _run_migrations_manual(cursor):
+    """Applies manual migrations (adding missing columns)."""
+    await _add_column_if_missing(cursor, "entities", "created_at DATETIME")
+    await _add_column_if_missing(cursor, "entities", "updated_at DATETIME")
+    await _add_column_if_missing(cursor, "entities", "created_by TEXT")
+    await _add_column_if_missing(cursor, "entities", "updated_by TEXT")
+    await _add_column_if_missing(cursor, "entities", "importance INTEGER DEFAULT 5")
+    await _add_column_if_missing(cursor, "audit_logs", "meta_data TEXT")
+    await _add_column_if_missing(cursor, "search_stats", "meta_data TEXT")
+    await _add_column_if_missing(cursor, "relations", "created_at DATETIME")
+    await _add_column_if_missing(cursor, "relations", "created_by TEXT")
+    await _add_column_if_missing(cursor, "observations", "created_by TEXT")
+    await _add_column_if_missing(cursor, "bank_files", "updated_by TEXT")
+    await _add_column_if_missing(cursor, "entities", "status TEXT DEFAULT 'active'")
+    await _add_column_if_missing(cursor, "relations", "status TEXT DEFAULT 'active'")
+    await _add_column_if_missing(cursor, "observations", "status TEXT DEFAULT 'active'")
+    await _add_column_if_missing(cursor, "bank_files", "status TEXT DEFAULT 'active'")
+    await _add_column_if_missing(cursor, "snapshots", "description TEXT")
+    await _add_column_if_missing(cursor, "snapshots", "file_path TEXT")
+    await _add_column_if_missing(
+        cursor, "knowledge_metadata", "decay_rate REAL DEFAULT 0.01"
+    )
+    await _add_column_if_missing(cursor, "search_stats", "hit_content_ids TEXT")
+    await _add_column_if_missing(cursor, "search_stats", "avg_similarity REAL DEFAULT 0.0")
+
+
+async def _create_fts_tables(cursor):
+    """Creates and populates FTS5 virtual tables."""
+    await cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
+            name, description, 
+            content='entities'
+        )
+    """)
+    await cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
+            entity_name, content, 
+            content='observations', content_rowid='id'
+        )
+    """)
+    await cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS bank_files_fts USING fts5(
+            filename, content, 
+            content='bank_files'
+        )
+    """)
+    await cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS troubleshooting_knowledge_fts USING fts5(
+            title, solution, affected_functions,
+            content='troubleshooting_knowledge', content_rowid='id'
+        )
+    """)
+
+    # FTS Triggers
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS entities_ai AFTER INSERT ON entities BEGIN
+            INSERT INTO entities_fts(rowid, name, description) 
+            VALUES (new.rowid, new.name, new.description);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
+            INSERT INTO entities_fts(entities_fts, rowid, name, description) 
+            VALUES('delete', old.rowid, old.name, old.description);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
+            INSERT INTO entities_fts(entities_fts, rowid, name, description) 
+            VALUES('delete', old.rowid, old.name, old.description);
+            INSERT INTO entities_fts(rowid, name, description) 
+            VALUES (new.rowid, new.name, new.description);
+        END;
+    """)
+
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
+            INSERT INTO observations_fts(rowid, entity_name, content) 
+            VALUES (new.id, new.entity_name, new.content);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
+            INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
+            VALUES('delete', old.id, old.entity_name, old.content);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
+            INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
+            VALUES('delete', old.id, old.entity_name, old.content);
+            INSERT INTO observations_fts(rowid, entity_name, content) 
+            VALUES (new.id, new.entity_name, new.content);
+        END;
+    """)
+
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS bank_files_ai AFTER INSERT ON bank_files BEGIN
+            INSERT INTO bank_files_fts(rowid, filename, content) 
+            VALUES (new.rowid, new.filename, new.content);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS bank_files_ad AFTER DELETE ON bank_files BEGIN
+            INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
+            VALUES('delete', old.rowid, old.filename, old.content);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS bank_files_au AFTER UPDATE ON bank_files BEGIN
+            INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
+            VALUES('delete', old.rowid, old.filename, old.content);
+            INSERT INTO bank_files_fts(rowid, filename, content) 
+            VALUES (new.rowid, new.filename, new.content);
+        END;
+    """)
+
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS troubleshooting_ai
+        AFTER INSERT ON troubleshooting_knowledge BEGIN
+            INSERT INTO troubleshooting_knowledge_fts
+                (rowid, title, solution, affected_functions)
+            VALUES (new.id, new.title, new.solution, new.affected_functions);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS troubleshooting_ad
+        AFTER DELETE ON troubleshooting_knowledge BEGIN
+            INSERT INTO troubleshooting_knowledge_fts(
+                troubleshooting_knowledge_fts, rowid, title, solution, affected_functions
+            )
+            VALUES('delete', old.id, old.title, old.solution, old.affected_functions);
+        END;
+    """)
+    await cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS troubleshooting_au
+        AFTER UPDATE ON troubleshooting_knowledge BEGIN
+            INSERT INTO troubleshooting_knowledge_fts(
+                troubleshooting_knowledge_fts, rowid, title, solution, affected_functions
+            )
+            VALUES(
+                'delete', old.id, old.title, old.solution, old.affected_functions
+            );
+            INSERT INTO troubleshooting_knowledge_fts
+                (rowid, title, solution, affected_functions)
+            VALUES (new.id, new.title, new.solution, new.affected_functions);
+        END;
+    """)
+
+    # Population
+    await cursor.execute("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
+    await cursor.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+    await cursor.execute("INSERT INTO bank_files_fts(bank_files_fts) VALUES('rebuild')")
+    await cursor.execute(
+        "INSERT INTO troubleshooting_knowledge_fts(troubleshooting_knowledge_fts) "
+        "VALUES('rebuild')"
+    )
+
+
 @retry_on_db_lock()
+async def _run_db_sequence(path: str):
+    """Internal helper to run the core DB sequence."""
+    async with await _async_get_connection_raw(path) as conn:
+        # Integrity Check
+        try:
+            await conn.execute("SELECT 1")
+            logger.info("DB Integrity Check: PASSED.")
+        except (aiosqlite.DatabaseError, sqlite3.DatabaseError) as e:
+            logger.error(f"DB Integrity Check: FAILED for {path}. {e}")
+            raise
+
+        logger.debug(f"Starting table creation/verification sequence for {path}...")
+        cursor = await conn.cursor()
+        try:
+            await _create_schema(cursor)
+            logger.info("Core schema verified.")
+        except Exception:
+            logger.exception("CRITICAL: Failed to create/verify core tables")
+            raise
+
+        await _run_migrations_manual(cursor)
+        await _create_fts_tables(cursor)
+
+        await conn.commit()
+
+        # --- RUN MIGRATIONS ---
+        from ripen.migrations.manager import MigrationManager
+
+        migrator = MigrationManager(get_db_path())
+        await migrator.run_migrations(conn)
+
+        # Final Verification
+        res = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entities'"
+        )
+        if not await res.fetchone():
+            raise DatabaseError("Critical failure: 'entities' table missing after init_db.")
+
+
+async def _recover_database(db_path: str):
+    """Internal helper to recover a corrupted database."""
+    await close_all_connections()
+    if os.path.exists(db_path):
+        import gc
+
+        gc.collect()
+        await asyncio.sleep(0.5)
+        try:
+            os.remove(db_path)
+            for ext in ["-wal", "-shm"]:
+                if os.path.exists(db_path + ext):
+                    os.remove(db_path + ext)
+        except PermissionError as pe:
+            logger.error(f"CRITICAL: Failed to remove corrupted DB: {pe}")
+            logger.error("Please terminate all background Ripen processes.")
+            raise DatabaseError("Database is corrupted AND locked by another process.") from pe
+        except Exception as re:
+            logger.error(f"Failed to remove corrupted DB: {re}")
+            raise
+
+    await _run_db_sequence(db_path)
+
+
 async def init_db(force: bool = False):
     global _DB_INITIALIZED
     if force:
@@ -250,367 +621,14 @@ async def init_db(force: bool = False):
     db_path = get_db_path()
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-    async def _run_sequence(path):
-        async with await _async_get_connection_raw(path) as conn:
-            # Integrity Check: verify file is a database
-            try:
-                await conn.execute("SELECT 1")
-                logger.info("DB Integrity Check: PASSED.")
-            except (aiosqlite.DatabaseError, sqlite3.DatabaseError) as e:
-                logger.error(f"DB Integrity Check: FAILED for {path}. {e}")
-                raise
-
-            logger.debug(f"Starting table creation/verification sequence for {path}...")
-            cursor = await conn.cursor()
-            try:
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS entities (
-                        name TEXT PRIMARY KEY,
-                        entity_type TEXT,
-                        description TEXT,
-                        importance INTEGER DEFAULT 5,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        created_by TEXT,
-                        updated_by TEXT,
-                        status TEXT DEFAULT 'active'
-                    )
-                """)
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS relations (
-                        subject TEXT,
-                        object TEXT,
-                        predicate TEXT,
-                        justification TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        created_by TEXT,
-                        status TEXT DEFAULT 'active',
-                        PRIMARY KEY (subject, object, predicate)
-                    )
-                """)
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS observations (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        entity_name TEXT,
-                        content TEXT,
-                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        created_by TEXT,
-                        status TEXT DEFAULT 'active'
-                    )
-                """)
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS embedding_cache (
-                        content_hash TEXT PRIMARY KEY,
-                        vector BLOB,
-                        model_name TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS bank_files (
-                        filename TEXT PRIMARY KEY,
-                        content TEXT,
-                        last_synced DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_by TEXT,
-                        status TEXT DEFAULT 'active'
-                    )
-                """)
-                logger.info("Core tables (entities, relations, observations, bank_files) verified.")
-            except Exception:
-                logger.exception("CRITICAL: Failed to create/verify core tables")
-                raise
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS embeddings (
-                    content_id TEXT PRIMARY KEY,
-                    vector BLOB,
-                    model_name TEXT,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS knowledge_metadata (
-                    content_id TEXT PRIMARY KEY,
-                    access_count INTEGER DEFAULT 0,
-                    last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    stability REAL DEFAULT 0.1,
-                    importance_score REAL DEFAULT 0.1
-                )
-            """)
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    table_name TEXT,
-                    content_id TEXT,
-                    action TEXT,
-                    old_data TEXT,
-                    new_data TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    agent_id TEXT,
-                    meta_data TEXT
-                )
-            """)
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS snapshots (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    file_path TEXT NOT NULL
-                )
-            """)
-            # Conflicts table (New in Phase 13)
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS conflicts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    entity_name TEXT NOT NULL,
-                    existing_content TEXT NOT NULL,
-                    new_content TEXT NOT NULL,
-                    reason TEXT,
-                    agent_id TEXT,
-                    detected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    resolved INTEGER DEFAULT 0
-                )
-            """)
-            # Search Stats table for Hit Rate and Knowledge Age calculation
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS search_stats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    query TEXT,
-                    results_count INTEGER,
-                    hit_content_ids TEXT,
-                    avg_similarity REAL DEFAULT 0.0,
-                    meta_data TEXT
-                )
-            """)
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS tags (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tag TEXT NOT NULL,
-                    content_id TEXT NOT NULL,
-                    content_type TEXT NOT NULL,
-                    UNIQUE(tag, content_id, content_type)
-                )
-            """)
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag)")
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_tags_content ON tags(content_id)")
-
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS troubleshooting_knowledge (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    solution TEXT NOT NULL,
-                    affected_functions TEXT,
-                    env_metadata TEXT,
-                    access_count INTEGER DEFAULT 0,
-                    status TEXT DEFAULT 'active',
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            await _add_column_if_missing(cursor, "entities", "created_at DATETIME")
-            await _add_column_if_missing(cursor, "entities", "updated_at DATETIME")
-            await _add_column_if_missing(cursor, "entities", "created_by TEXT")
-            await _add_column_if_missing(cursor, "entities", "updated_by TEXT")
-            await _add_column_if_missing(cursor, "entities", "importance INTEGER DEFAULT 5")
-            await _add_column_if_missing(cursor, "audit_logs", "meta_data TEXT")
-            await _add_column_if_missing(cursor, "search_stats", "meta_data TEXT")
-
-            await _add_column_if_missing(cursor, "relations", "created_at DATETIME")
-            await _add_column_if_missing(cursor, "relations", "created_by TEXT")
-
-            await _add_column_if_missing(cursor, "observations", "created_by TEXT")
-
-            await _add_column_if_missing(cursor, "bank_files", "updated_by TEXT")
-            await _add_column_if_missing(cursor, "entities", "status TEXT DEFAULT 'active'")
-            await _add_column_if_missing(cursor, "relations", "status TEXT DEFAULT 'active'")
-            await _add_column_if_missing(cursor, "observations", "status TEXT DEFAULT 'active'")
-            await _add_column_if_missing(cursor, "bank_files", "status TEXT DEFAULT 'active'")
-
-            await _add_column_if_missing(cursor, "snapshots", "description TEXT")
-            await _add_column_if_missing(cursor, "snapshots", "file_path TEXT")
-            await _add_column_if_missing(cursor, "knowledge_metadata", "decay_rate REAL DEFAULT 0.01")
-            await _add_column_if_missing(cursor, "search_stats", "hit_content_ids TEXT")
-            await _add_column_if_missing(cursor, "search_stats", "avg_similarity REAL DEFAULT 0.0")
-
-            # --- Full Text Search (FTS5) Support ---
-            await cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
-                    name, description, 
-                    content='entities'
-                )
-            """)
-            await cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
-                    entity_name, content, 
-                    content='observations', content_rowid='id'
-                )
-            """)
-            await cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS bank_files_fts USING fts5(
-                    filename, content, 
-                    content='bank_files'
-                )
-            """)
-            await cursor.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS troubleshooting_knowledge_fts USING fts5(
-                    title, solution, affected_functions,
-                    content='troubleshooting_knowledge', content_rowid='id'
-                )
-            """)
-
-            # FTS Triggers: entities
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS entities_ai AFTER INSERT ON entities BEGIN
-                    INSERT INTO entities_fts(rowid, name, description) 
-                    VALUES (new.rowid, new.name, new.description);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
-                    INSERT INTO entities_fts(entities_fts, rowid, name, description) 
-                    VALUES('delete', old.rowid, old.name, old.description);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
-                    INSERT INTO entities_fts(entities_fts, rowid, name, description) 
-                    VALUES('delete', old.rowid, old.name, old.description);
-                    INSERT INTO entities_fts(rowid, name, description) 
-                    VALUES (new.rowid, new.name, new.description);
-                END;
-            """)
-
-            # FTS Triggers: observations
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
-                    INSERT INTO observations_fts(rowid, entity_name, content) 
-                    VALUES (new.id, new.entity_name, new.content);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-                    INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
-                    VALUES('delete', old.id, old.entity_name, old.content);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-                    INSERT INTO observations_fts(observations_fts, rowid, entity_name, content) 
-                    VALUES('delete', old.id, old.entity_name, old.content);
-                    INSERT INTO observations_fts(rowid, entity_name, content) 
-                    VALUES (new.id, new.entity_name, new.content);
-                END;
-            """)
-
-            # FTS Triggers: bank_files
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS bank_files_ai AFTER INSERT ON bank_files BEGIN
-                    INSERT INTO bank_files_fts(rowid, filename, content) 
-                    VALUES (new.rowid, new.filename, new.content);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS bank_files_ad AFTER DELETE ON bank_files BEGIN
-                    INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
-                    VALUES('delete', old.rowid, old.filename, old.content);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS bank_files_au AFTER UPDATE ON bank_files BEGIN
-                    INSERT INTO bank_files_fts(bank_files_fts, rowid, filename, content) 
-                    VALUES('delete', old.rowid, old.filename, old.content);
-                    INSERT INTO bank_files_fts(rowid, filename, content) 
-                    VALUES (new.rowid, new.filename, new.content);
-                END;
-            """)
-
-            # FTS Triggers: troubleshooting_knowledge
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS troubleshooting_ai
-                AFTER INSERT ON troubleshooting_knowledge BEGIN
-                    INSERT INTO troubleshooting_knowledge_fts
-                        (rowid, title, solution, affected_functions)
-                    VALUES (new.id, new.title, new.solution, new.affected_functions);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS troubleshooting_ad
-                AFTER DELETE ON troubleshooting_knowledge BEGIN
-                    INSERT INTO troubleshooting_knowledge_fts(
-                        troubleshooting_knowledge_fts, rowid, title, solution, affected_functions
-                    )
-                    VALUES('delete', old.id, old.title, old.solution, old.affected_functions);
-                END;
-            """)
-            await cursor.execute("""
-                CREATE TRIGGER IF NOT EXISTS troubleshooting_au
-                AFTER UPDATE ON troubleshooting_knowledge BEGIN
-                    INSERT INTO troubleshooting_knowledge_fts(
-                        troubleshooting_knowledge_fts, rowid, title, solution, affected_functions
-                    )
-                    VALUES(
-                        'delete', old.id, old.title, old.solution, old.affected_functions
-                    );
-                    INSERT INTO troubleshooting_knowledge_fts
-                        (rowid, title, solution, affected_functions)
-                    VALUES (new.id, new.title, new.solution, new.affected_functions);
-                END;
-            """)
-
-            # Population: Ensure existing data is indexed
-            await cursor.execute("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
-            await cursor.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
-            await cursor.execute("INSERT INTO bank_files_fts(bank_files_fts) VALUES('rebuild')")
-            await cursor.execute(
-                "INSERT INTO troubleshooting_knowledge_fts(troubleshooting_knowledge_fts) "
-                "VALUES('rebuild')"
-            )
-
-            await conn.commit()
-
-            # --- RUN MIGRATIONS ---
-            from ripen.migrations.manager import MigrationManager
-
-            migrator = MigrationManager(get_db_path())
-            await migrator.run_migrations(conn)
-
-            # Final Verification
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='entities'"
-            )
-            if not await cursor.fetchone():
-                raise DatabaseError("Critical failure: 'entities' table missing after init_db.")
-
     try:
-        await _run_sequence(db_path)
+        await _run_db_sequence(db_path)
         _DB_INITIALIZED = True
         logger.info("Main database initialization successful.")
     except (aiosqlite.DatabaseError, sqlite3.DatabaseError, DatabaseError) as e:
-        logger.warning(f"Database initialization failed (likely corruption): {e}. Recreating...")
+        logger.warning(f"Database initialization failed: {e}. Recreating...")
         _DB_INITIALIZED = False
-        await close_all_connections()
-        if os.path.exists(db_path):
-            import gc
-            gc.collect()
-            await asyncio.sleep(0.5)  # Give Windows time to release the file handle
-            try:
-                os.remove(db_path)
-                # Also remove WAL files if they exist
-                for ext in ["-wal", "-shm"]:
-                    if os.path.exists(db_path + ext):
-                        os.remove(db_path + ext)
-            except PermissionError as pe:
-                logger.error(f"CRITICAL: Failed to remove corrupted DB due to file lock: {pe}")
-                logger.error("ACTION REQUIRED: Another python.exe process is running in the background and holding the knowledge.db file lock.")
-                logger.error("Please terminate all background Ripen/Python processes, or restart your terminal, and try again.")
-                raise DatabaseError("Database is corrupted AND locked by another process. Please kill all background python.exe processes.") from pe
-            except Exception as re:
-                logger.error(f"Failed to remove corrupted DB: {re}")
-                raise
-        
-        # Retry once after deletion
-        await _run_sequence(db_path)
+        await _recover_database(db_path)
         _DB_INITIALIZED = True
         logger.info("Main database recovered and initialized successfully.")
     except Exception as e:

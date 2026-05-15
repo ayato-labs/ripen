@@ -1,6 +1,8 @@
 from typing import Any
+
 from ripen.infra.repos.base import BaseSQLiteRepository
 from ripen.infra.repository_base import IBankRepository
+
 
 class BankRepository(BaseSQLiteRepository, IBankRepository):
     async def get_active_filenames(self) -> list[str]:

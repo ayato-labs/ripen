@@ -126,7 +126,8 @@ class LicenseManager:
             else:
                 logger.warning("Trial period has expired.")
                 return False
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Trial validation failed (likely marker missing): {e}")
             return False
 
     def get_status_summary(self) -> str:
@@ -173,8 +174,8 @@ class LicenseManager:
                         expiry_date = start_date + timedelta(days=trial_days)
                         remaining = (expiry_date - datetime.now()).days
                         return f"Trial Period (Active) - {remaining} days remaining"
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to read trial marker for status: {e}")
                 return "Trial Period (Active)"
             else:
                 return "Trial Period (Expired)"
