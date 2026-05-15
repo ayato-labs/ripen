@@ -75,13 +75,17 @@ async def process_thought_core(
     validation, and persistence.
     """
     session_id = session_id or "default_session"
+    logger.debug(f"Attempting to acquire session lock for: {session_id}")
 
     async with _SESSION_LOCKS[session_id]:
+        logger.debug(f"Session lock acquired for: {session_id}")
         try:
             start_total = time.perf_counter()
 
             # 0. Infrastructure readiness
+            logger.debug(f"Initializing thoughts DB for thought #{thought_number}...")
             await init_thoughts_db()
+            logger.debug("Thoughts DB initialized.")
             dur_init = time.perf_counter() - start_total
 
             logger.info(

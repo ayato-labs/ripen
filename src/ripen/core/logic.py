@@ -145,12 +145,15 @@ async def save_memory_core(
     local_logger.info("save_memory_core execution started")
     try:
         try:
+            logger.debug("STEP 0: DB Initialization starting")
             await init_db()
+            logger.debug("STEP 0: DB Initialization success")
         except Exception as e:
             local_logger.exception("CRITICAL: Database initialization failed")
             raise RuntimeError(f"Critical Error: Could not initialize database: {e}") from e
 
         # --- Normalization ---
+        logger.debug("STEP 1: Normalization starting")
         local_logger.debug("Normalizing inputs...")
         entities = normalize_entities(entities)
         observations = normalize_observations(observations)
@@ -161,6 +164,7 @@ async def save_memory_core(
         )
 
         # --- Phase 1: Pre-compute AI results ---
+        logger.debug("STEP 2: Phase 1 (AI Computation) starting")
         start_time = time.perf_counter()
         local_logger.info(
             "Phase 1 (AI Computation) started: "
@@ -258,6 +262,7 @@ async def save_memory_core(
                         entity_name,
                         [item["content"] for item in entity_groups[entity_name]],
                         agent_id,
+                        uow=uow,
                     )
                     for entity_name in unique_entities
                 ]
@@ -373,15 +378,19 @@ async def read_memory_core(query: str | None = None) -> dict[str, Any] | str:
         from ripen.infra.uow import UnitOfWork
 
         async with UnitOfWork() as uow:
+            logger.debug("STEP 1: UoW Session established")
             if query:
+                logger.debug(f"STEP 2: Performing search for query: {query}")
                 graph_data, bank_data = await search.perform_search(query, uow)
             else:
                 # IMPORTANT: DO NOT return all data. Limit to recent 20 items.
+                logger.debug("STEP 2: Listing recent memories (no query)")
                 graph_data = await graph.get_graph_data(uow, limit=20)
                 bank_data = await bank.read_bank_data(uow, limit=5) # Bank is also heavy
 
             duration = time.perf_counter() - start_time
             logger.info(f"read_memory_core COMPLETE query='{query}' duration={duration:.2f}s")
+            logger.debug(f"STEP 3: Search results retrieved (entities={len(graph_data.get('entities', []))})")
             return {"graph": graph_data, "bank": bank_data}
     except Exception as e:
         logger.exception(f"Unexpected error in read_memory_core: {e}")

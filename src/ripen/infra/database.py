@@ -14,34 +14,41 @@ logger = get_logger("database")
 _MAIN_CONNECTION: aiosqlite.Connection | None = None
 _THOUGHTS_CONNECTION: aiosqlite.Connection | None = None
 
-# Global lock to prevent race conditions during singleton initialization
-_INIT_LOCK: asyncio.Lock | None = None
+# Global locks to prevent race conditions during singleton initialization
+_INIT_LOCKS: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
 
 
 def _get_init_lock() -> asyncio.Lock:
-    global _INIT_LOCK
-    if _INIT_LOCK is None:
-        _INIT_LOCK = asyncio.Lock()
-    return _INIT_LOCK
+    """Returns an initialization lock bound to the current event loop."""
+    loop = asyncio.get_running_loop()
+    if loop not in _INIT_LOCKS:
+        _INIT_LOCKS[loop] = asyncio.Lock()
+    return _INIT_LOCKS[loop]
 
 
 # Global semaphores mapped by event loop to limit concurrent DB writes
-_WRITE_SEMAPHORES: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+_MAIN_SEMAPHORES: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+_THOUGHTS_SEMAPHORES: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
 
 
-def get_write_semaphore() -> asyncio.Semaphore:
-    """Returns a write semaphore bound to the current event loop."""
+def get_write_semaphore(is_thoughts: bool = False) -> asyncio.Semaphore:
+    """Returns a write semaphore bound to the current event loop and target database."""
     loop = asyncio.get_running_loop()
-    if loop not in _WRITE_SEMAPHORES:
-        _WRITE_SEMAPHORES[loop] = asyncio.Semaphore(1)
-    return _WRITE_SEMAPHORES[loop]
+    if is_thoughts:
+        if loop not in _THOUGHTS_SEMAPHORES:
+            _THOUGHTS_SEMAPHORES[loop] = asyncio.Semaphore(1)
+        return _THOUGHTS_SEMAPHORES[loop]
+    else:
+        if loop not in _MAIN_SEMAPHORES:
+            _MAIN_SEMAPHORES[loop] = asyncio.Semaphore(1)
+        return _MAIN_SEMAPHORES[loop]
 
 
 # Global flag to track if the main database has been initialized in the current session.
 _DB_INITIALIZED = False
 
 
-def retry_on_db_lock(max_retries=15, initial_delay=0.1):
+def retry_on_db_lock(max_retries=10, initial_delay=0.1):
     def decorator(func):
         async def wrapper(*args, **kwargs):
             retries = 0
@@ -93,7 +100,9 @@ class AsyncSQLiteConnection:
     async def __aenter__(self):
         global _MAIN_CONNECTION, _THOUGHTS_CONNECTION
         try:
+            logger.debug(f"Waiting for DB init lock (is_thoughts={self.is_thoughts})...")
             async with _get_init_lock():
+                logger.debug(f"DB init lock ACQUIRED (is_thoughts={self.is_thoughts})")
                 if self.is_thoughts:
                     if _THOUGHTS_CONNECTION is None:
                         logger.info(f"Establishing NEW thoughts singleton: {self.db_path}")

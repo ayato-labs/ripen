@@ -162,8 +162,8 @@ class AIRateLimiter:
     _last_call_times: dict[str, float] = {}
     _locks: dict[str, asyncio.Lock] = {}
 
-    GENERATION_INTERVAL = 6.0
-    EMBEDDING_INTERVAL = 1.0
+    GENERATION_INTERVAL = 1.0
+    EMBEDDING_INTERVAL = 0.2
 
     @classmethod
     def set_min_interval(cls, interval: float, task_type: str = "generation"):

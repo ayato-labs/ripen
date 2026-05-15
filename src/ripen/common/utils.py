@@ -84,7 +84,7 @@ def configure_logging():
         backtrace=True,
         diagnose=True,
         encoding="utf-8",
-        enqueue=True,
+        enqueue=False,
     )
 
     if "PYTEST_CURRENT_TEST" in os.environ:
@@ -102,7 +102,7 @@ def configure_logging():
         serialize=True,
         retention=2,
         encoding="utf-8",
-        enqueue=True,
+        enqueue=False,
     )
 
     _LOGGING_CONFIGURED = True

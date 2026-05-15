@@ -168,9 +168,16 @@ class GeminiProvider(LlmProvider):
         await AIRateLimiter.throttle(task_type="generation")
 
         try:
-            response = await client.aio.models.generate_content(model=model, contents=full_prompt)
+            # Add explicit timeout to prevent indefinite hangs on network/API issues
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(model=model, contents=full_prompt),
+                timeout=30.0
+            )
             logger.info(f"Gemini response received. Model: {model}")
             return response.text
+        except asyncio.TimeoutError:
+            logger.error(f"Gemini API call TIMEOUT (30s) - Model: {model}")
+            raise Exception("AI Brain response timed out. Please try again.")
         except Exception as e:
             logger.error(f"Gemini API call failed: {e}")
             raise

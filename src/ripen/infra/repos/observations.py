@@ -4,6 +4,9 @@ from ripen.infra.repository_base import IObservationRepository
 
 class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
     async def get_recent_observations(self, entity_name: str, limit: int = 5) -> list[str]:
+        from ripen.common.utils import get_logger
+        log = get_logger("repos.obs")
+        log.debug(f"QUERY: get_recent_observations for {entity_name} (limit={limit})")
         cursor = await self.conn.execute(
             "SELECT content FROM observations WHERE entity_name = ? "
             "ORDER BY timestamp DESC LIMIT ?",
@@ -12,12 +15,18 @@ class ObservationRepository(BaseSQLiteRepository, IObservationRepository):
         return [row[0] for row in await cursor.fetchall()]
 
     async def insert_observation(self, entity_name: str, content: str, agent_id: str) -> None:
+        from ripen.common.utils import get_logger
+        log = get_logger("repos.obs")
+        log.debug(f"QUERY: insert_observation for {entity_name} (agent={agent_id})")
         await self.conn.execute(
             "INSERT INTO observations (entity_name, content, created_by) VALUES (?, ?, ?)",
             (entity_name, content, agent_id),
         )
 
     async def get_observations_by_entity_names(self, names: list[str]) -> list[dict[str, Any]]:
+        from ripen.common.utils import get_logger
+        log = get_logger("repos.obs")
+        log.debug(f"QUERY: get_observations_by_entity_names for {len(names)} entities")
         if not names:
             return []
         placeholders = ",".join(["?"] * len(names))

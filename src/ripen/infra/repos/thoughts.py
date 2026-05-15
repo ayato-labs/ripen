@@ -27,14 +27,14 @@ class ThoughtRepository(BaseSQLiteRepository, IThoughtRepository):
         # Create FTS5 table for thought search
         await self.conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS thought_history_fts "
-            "USING fts5(session_id, thought, content='thought_history')"
+            "USING fts5(session_id, thought_number, thought, content='thought_history')"
         )
         # Triggers for FTS
         await self.conn.execute(
             """
             CREATE TRIGGER IF NOT EXISTS thought_history_ai AFTER INSERT ON thought_history BEGIN
-                INSERT INTO thought_history_fts(rowid, session_id, thought) 
-                VALUES (new.rowid, new.session_id, new.thought);
+                INSERT INTO thought_history_fts(rowid, session_id, thought_number, thought) 
+                VALUES (new.rowid, new.session_id, new.thought_number, new.thought);
             END;
         """
         )

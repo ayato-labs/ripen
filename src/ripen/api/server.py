@@ -56,9 +56,19 @@ mcp = FastMCP(
 # To mount a Starlette Router, we add it to _additional_http_routes.
 mcp._additional_http_routes.append(Mount("/dashboard", app=dashboard_router))
 
+def handle_exception(loop, context):
+    msg = context.get("exception", context["message"])
+    logger.error(f"ASYNC_LOOP_CRITICAL: {msg}")
+    import traceback
+    if "exception" in context:
+        logger.error("".join(traceback.format_exception(context["exception"])))
+
 @asynccontextmanager
 async def lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     """Startup sequence for the hub."""
+    loop = asyncio.get_running_loop()
+    loop.set_exception_handler(handle_exception)
+    
     logger.info("Ripen Hub: Starting lifespan sequence...")
 
     # 1. Init Database
@@ -80,7 +90,7 @@ async def lifespan(app: Starlette) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.error(f"[BACKEND STATUS] AI Brain (LLM): FAILED - {e}")
 
-    logger.info("Ripen Hub: Startup complete.")
+    logger.info("Ripen Hub: Startup complete. Listening for connections.")
     
     try:
         yield
@@ -221,18 +231,22 @@ async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False) -> 
     Trigger this to purge ancient, unused knowledge and maintain system performance."""
     return await logic_module.admin_run_knowledge_gc_core(age_days, dry_run)
 
-# --- MCP PROTOCOL PATCH ---
+# --- MCP PROTOCOL PATCH (DEEP TRACING) ---
 try:
     from mcp.server.session import ServerSession
     _orig_received_request = ServerSession._received_request
     async def _patched_received_request(self, request):
         try:
+            # Trace EVERY request entering the protocol layer
+            logger.debug(f"MCP_REQ_TRACE: Method={getattr(request, 'method', 'unknown')}, ID={getattr(request, 'id', 'none')}")
             return await _orig_received_request(self, request)
         except Exception as e:
-            logger.error(f"MCP Protocol Error: Handled malformed request: {e}")
-            pass
+            logger.error(f"MCP Protocol CRITICAL: Failed to process request: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise # Re-raise to let the system know something is wrong, instead of silent 'pass'
     ServerSession._received_request = _patched_received_request
-    logger.info("MCP Protocol Patch: ServerSession._received_request is now PERMISSIVE.")
+    logger.info("MCP Protocol Patch: Deep Tracing enabled.")
 except Exception as e:
     logger.warning(f"Failed to apply MCP Protocol Patch: {e}")
 
@@ -268,6 +282,7 @@ def print_banner(mode: str, port: int):
     sys.stderr.flush()
 
 def main():
+    logger.info("Main execution started (Args: {})", sys.argv)
     parser = argparse.ArgumentParser(description="Ripen Hub Server")
     parser.add_argument("--stdio", action="store_true", help="Start in STDIO proxy mode")
     parser.add_argument("--sse", action="store_true", help="Start in SSE mode (HTTP)")
@@ -277,6 +292,7 @@ def main():
     parser.add_argument("hub_url_pos", type=str, nargs="?", help="Hub URL (for Proxy mode)")
 
     args = parser.parse_args()
+    logger.debug("Arguments parsed successfully.")
 
     if args.dev:
         os.environ["LOG_LEVEL"] = "DEBUG"
@@ -296,25 +312,63 @@ def main():
         use_sse = args.sse or settings.default_transport == "sse"
 
     port = args.port or settings.sse_port or 8377
+    logger.info(f"Transport check: use_sse={use_sse}, port={port}")
 
     if use_sse:
+        logger.info("Starting SSE cleanup and port check...")
         # Kill any zombie process on the target port (Windows specific stability fix)
         _kill_port_process(port)
+        logger.info("Cleanup completed. Checking port availability...")
+
+        # Double check port availability
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(("127.0.0.1", port))
+        if result == 0:
+            logger.error(f"PORT CONFLICT: Port {port} is already in use by another process. Please stop all other Ripen Hub instances.")
+            sock.close()
+            sys.exit(1)
+        sock.close()
+        logger.info("Port is available.")
 
         # Load plugins before starting
+        logger.info("Loading plugins...")
         PluginLoader.load_all(context={"settings": settings})
+        logger.info("Plugins loaded. Printing banner...")
         print_banner("SSE (Server-Sent Events)", port)
+        logger.info("Banner printed. Running FastMCP server...")
         mcp.run(transport="sse", host=args.host, port=port, show_banner=False)
     else:
-        # STDIO mode: Check if we should run as a proxy or native server
+        # STDIO mode
         target_hub = args.hub_url_pos
-        if target_hub and "<" not in target_hub:
-            logger.info(f"Starting STDIO Proxy -> {target_hub}")
-            asyncio.run(run_stdio_proxy(target_hub))
+        logger.info(f"Entering STDIO mode. target_hub={target_hub}")
+        
+        # If --stdio is explicitly used, we prioritize the PROXY/BRIDGE behavior
+        # This allows STDIO-only agents to talk to an SSE Hub (Local or Team)
+        if args.stdio:
+            if target_hub and "<" not in target_hub:
+                logger.info(f"Starting STDIO Proxy -> {target_hub}")
+                asyncio.run(run_stdio_proxy(target_hub))
+            else:
+                # If no URL is provided, try to find a running Hub (Adaptive Discovery)
+                # If it fails, we catch the exit and fallback to native
+                logger.info("Starting STDIO Adaptive Proxy (searching for local/team hub)...")
+                try:
+                    asyncio.run(run_stdio_proxy())
+                except SystemExit as e:
+                    if e.code != 0:
+                        logger.warning("No running Ripen Hub found. Falling back to NATIVE STDIO mode.")
+                        # Native STDIO mode fallback
+                        PluginLoader.load_all(context={"settings": settings})
+                        print_banner("STDIO (Standard I/O) - NATIVE", 0)
+                        mcp.run(transport="stdio", show_banner=False)
+                    else:
+                        raise
         else:
-            # Native STDIO mode
+            # Not --stdio (default fallback if somehow use_sse was false)
+            logger.info("Defaulting to native STDIO mode.")
             PluginLoader.load_all(context={"settings": settings})
-            print_banner("STDIO (Standard I/O)", 0)
+            print_banner("STDIO (Standard I/O) - NATIVE", 0)
             mcp.run(transport="stdio", show_banner=False)
 
 
@@ -326,25 +380,45 @@ def _kill_port_process(port: int):
     if sys.platform != "win32":
         return
 
+    current_pid = os.getpid()
+    logger.info(f"Executing _kill_port_process for port {port} (Current PID: {current_pid})")
     try:
         import subprocess
-
-        # Find PID using netstat
+        # 1. Kill by port
         cmd = f"netstat -ano | findstr :{port}"
-        output = subprocess.check_output(cmd, shell=True).decode()
-        for line in output.strip().split("\n"):
-            if "LISTENING" in line:
-                parts = line.strip().split()
-                if not parts:
-                    continue
-                pid = parts[-1]
-                logger.warning(f"Killing zombie process {pid} on port {port}")
-                subprocess.run(["taskkill", "/F", "/PID", pid], check=True, capture_output=True)
-    except subprocess.CalledProcessError:
-        # This usually means no process was found on that port, which is fine
-        pass
+        logger.debug(f"Running: {cmd}")
+        try:
+            output = subprocess.check_output(cmd, shell=True).decode()
+            logger.debug(f"netstat output: {output}")
+            for line in output.strip().split("\n"):
+                if "LISTENING" in line:
+                    parts = line.strip().split()
+                    if parts:
+                        pid = parts[-1]
+                        try:
+                            pid_int = int(pid)
+                            if pid_int != 0 and pid_int != current_pid:
+                                logger.warning(f"Killing zombie process {pid_int} on port {port}")
+                                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid_int)], check=False, capture_output=True)
+                        except ValueError:
+                            logger.warning(f"Could not parse PID from line: {line}")
+        except subprocess.CalledProcessError:
+            logger.debug("No process found listening on port.")
+
+        # 2. Kill by name (Aggressive Cleanup)
+        # This ensures no duplicate proxies or hubs are hanging around
+        # We MUST exclude our own PID to avoid self-termination
+        logger.debug("Performing aggressive cleanup...")
+        # Note: taskkill /IM kills by process name. If the current process is ripen.exe, this would kill it.
+        # We use /FI to exclude the current PID.
+        subprocess.run(f'taskkill /F /IM ripen.exe /FI "PID ne {current_pid}"', shell=True, check=False, capture_output=True)
+        
+        # We removed the WMIC-based cleanup because its command line often matched 
+        # the filter pattern, causing the shell to terminate prematurely.
+        # The netstat check above is sufficient for port conflicts.
+            
     except Exception as e:
-        logger.error(f"Failed to kill zombie process on port {port}: {e}")
+        logger.error(f"Aggressive cleanup failed: {e}")
 
 
 async def wait_for_background_tasks(timeout: float = 5.0):
