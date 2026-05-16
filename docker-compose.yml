@@ -4,8 +4,13 @@ services:
     ports:
       - "8377:8377"
     volumes:
-      - ./data:/data
+      - ripen_data:/data
     environment:
+      - RIPEN_HOME=/data
+      - LLM_PROVIDER=gemini
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - LOG_LEVEL=INFO
     restart: unless-stopped
+
+volumes:
+  ripen_data:
