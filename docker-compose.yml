@@ -1,7 +1,6 @@
 services:
   ripen:
     image: ghcr.io/ayato-labs/ripen:latest
-    container_name: ripen-hub
     ports:
       - "8377:8377"
     volumes:
