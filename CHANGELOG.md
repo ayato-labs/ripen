@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.8.1 (2026-05-16)
+
+### Bug Fixes
+
+- Trigger release v1.8.1
+  ([`df3bbe5`](https://github.com/ayato-labs/ripen/commit/df3bbe574b62b6e4df04a23e967fd2c59ebdb328))
+
+
 ## v1.8.0 (2026-04-22)
 
 ### Features
