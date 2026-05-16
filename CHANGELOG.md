@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.8.4 (2026-05-16)
+
+### Bug Fixes
+
+- Add --copy-metadata for fastmcp and ripen to PyInstaller
+  ([`37051b5`](https://github.com/ayato-labs/ripen/commit/37051b554cde7263acbb3fbc2c4883ab314de881))
+
+- Rename SharedMemoryRegister to RipenInstaller
+  ([`79517ce`](https://github.com/ayato-labs/ripen/commit/79517ce416a92bba9b10e324e4f5e8dd2de68622))
+
+
 ## v1.8.3 (2026-05-16)
 
 ### Bug Fixes
