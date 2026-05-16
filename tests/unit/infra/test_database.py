@@ -75,3 +75,22 @@ async def test_retry_on_db_lock_failure():
 
     # max_retries=2 means 2 attempts (Attempt 1, Attempt 2 raises)
     assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_database_write_and_read():
+    """Verify that we can write and read data using the connection."""
+    await init_db(force=True)
+    db_path = get_db_path()
+    async with await AsyncSQLiteConnection(db_path) as db:
+        await db.execute(
+            "INSERT INTO entities (name, description) VALUES ('TestNode', 'Test desc')"
+        )
+        await db.commit()
+
+        async with db.execute(
+            "SELECT description FROM entities WHERE name='TestNode'"
+        ) as cursor:
+            row = await cursor.fetchone()
+            assert row is not None
+            assert row["description"] == "Test desc"
