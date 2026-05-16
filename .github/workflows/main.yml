@@ -118,15 +118,22 @@ jobs:
         run: |
           uv run pyinstaller --onefile --name Ripen --clean src/ripen/api/server.py
           uv run pyinstaller --onefile --name SharedMemoryRegister --clean src/ripen/cli/register.py
+      - name: Get Latest Tag
+        id: tag
+        shell: bash
+        run: |
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
       - name: Upload Binaries to Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/Ripen.exe
             dist/SharedMemoryRegister.exe
-          # If a tag was just created, it will be used. 
-          # If not, it will try to use the current commit's tag if any.
+          tag_name: ${{ steps.tag.outputs.tag }}
           fail_on_unmatched_files: false
           append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
