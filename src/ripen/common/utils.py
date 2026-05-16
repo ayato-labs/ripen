@@ -382,6 +382,7 @@ def safe_main_executor(main_func):
     """
 
     def wrapper(*args, **kwargs):
+        configure_logging()
         try:
             return main_func(*args, **kwargs)
         except Exception as e:
