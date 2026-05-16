@@ -14,10 +14,8 @@ if CURRENT_SRC not in sys.path:
     sys.path.insert(0, CURRENT_SRC)
 
 from fastmcp import FastMCP
-from starlette.applications import Starlette
-from starlette.routing import Mount
 
-from ripen.api.dashboard import router as dashboard_router
+# Import project modules
 from ripen.api.licensing import LicenseManager
 from ripen.common.config import settings
 from ripen.common.plugins import PluginLoader
@@ -47,16 +45,12 @@ def get_current_user() -> str:
     return "ayato-labs"
 
 # Create FastMCP server instance
-# Using Ripen-v2 and version from main branch as it seems to be the target release version
 mcp = FastMCP(
     "Ripen-v2",
     version="3.2.4",
 )
 
-# Attach Dashboard
-# Note: FastMCP.mount() is for mounting other FastMCP servers.
-# To mount a Starlette Router, we add it to _additional_http_routes.
-mcp._additional_http_routes.append(Mount("/dashboard", app=dashboard_router))
+
 
 def handle_exception(_loop, context):
     msg = context.get("exception", context["message"])
@@ -66,7 +60,7 @@ def handle_exception(_loop, context):
         logger.error("".join(traceback.format_exception(context["exception"])))
 
 @asynccontextmanager
-async def lifespan(_app: Starlette) -> AsyncGenerator[None, None]:
+async def lifespan(_mcp_instance: FastMCP) -> AsyncGenerator[None, None]:
     """Startup sequence for the hub."""
     loop = asyncio.get_running_loop()
     loop.set_exception_handler(handle_exception)
@@ -109,20 +103,19 @@ mcp._lifespan = lifespan
 
 @mcp.tool()
 async def save_memory(
-    entities: list[dict] | None = None,
-    relations: list[dict] | None = None,
-    observations: list[str] | None = None,
-    bank_files: list[dict] | None = None,
+    entities: list[dict],
+    relations: list[dict],
+    observations: list[dict],
+    bank_files: list[str] | None = None,
     agent_id: str | None = None,
 ) -> str:
     """
-    Persists new knowledge into the memory hub.
-    - entities: List of {name, type, description}
-    - relations: List of {source, target, relation_type}
-    - observations: List of factual strings
-    - bank_files: List of {path, content} for technical references
+    Persists knowledge to the long-term memory hub.
+    Input should follow the structured JSON format for entities and relations.
     """
-    logger.info(f"Tool called: save_memory by agent='{agent_id}'")
+    logger.info(
+        f"Tool called: save_memory (Entities: {len(entities)}, Relations: {len(relations)})"
+    )
     user = agent_id or get_current_user() or "default_agent"
     try:
         await logic_module.save_memory_core(
@@ -325,6 +318,7 @@ def main():
     parser.add_argument("--port", type=int, help="Port for the server")
     parser.add_argument("--host", default="0.0.0.0", help="Host for the server")
     parser.add_argument("--dev", action="store_true", help="Start in development mode")
+
 
     args = parser.parse_args()
     logger.debug("Arguments parsed successfully.")

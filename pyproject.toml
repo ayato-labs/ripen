@@ -60,6 +60,7 @@ ripen-init = "ripen.cli.init:main"
 ripen-register = "ripen.cli.register:main"
 ripen-unregister = "ripen.cli.unregister:main"
 ripen-admin = "ripen.cli.admin_cli:main"
+ripen-admin-server = "ripen.api.admin_server:main"
 
 [build-system]
 requires = ["hatchling"]
