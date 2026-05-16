@@ -97,7 +97,8 @@ def build_target(target: str, base_dir: Path):
             "--hidden-import=ripen.api.server",
             "--hidden-import=fastembed",
             "--hidden-import=faiss",
-            "--hidden-import=google.genai"
+            "--hidden-import=google.genai",
+            "--hidden-import=uvicorn"
         ])
     elif target == "admin":
         cmd.extend([

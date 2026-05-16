@@ -318,12 +318,9 @@ def print_banner(mode: str, port: int):
 def main():
     logger.info("Main execution started (Args: {})", sys.argv)
     parser = argparse.ArgumentParser(description="Ripen Hub Server")
-    parser.add_argument("--stdio", action="store_true", help="Start in STDIO proxy mode")
-    parser.add_argument("--sse", action="store_true", help="Start in SSE mode (HTTP)")
-    parser.add_argument("--port", type=int, help="Port for SSE mode")
-    parser.add_argument("--host", default="0.0.0.0", help="Host for SSE mode")
+    parser.add_argument("--port", type=int, help="Port for the server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host for the server")
     parser.add_argument("--dev", action="store_true", help="Start in development mode")
-    parser.add_argument("hub_url_pos", type=str, nargs="?", help="Hub URL (for Proxy mode)")
 
     args = parser.parse_args()
     logger.debug("Arguments parsed successfully.")

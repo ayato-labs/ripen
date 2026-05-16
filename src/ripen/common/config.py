@@ -108,33 +108,6 @@ class Settings:
             self._api_key = api_key.strip()
             return self._api_key
 
-        # 2. Claude Desktop config (settings.json) search
-        try:
-            config_paths = [
-                Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json",
-                Path.home()
-                / "Library"
-                / "Application Support"
-                / "Claude"
-                / "claude_desktop_config.json",
-            ]
-            for path in config_paths:
-                if path.exists():
-                    with open(path, encoding="utf-8") as f:
-                        settings_json = json.load(f)
-
-                    # Search in mcpServers -> Ripen -> env
-                    # Also check for "SharedMemoryServer" for backward compatibility
-                    server_names = ["Ripen", "SharedMemoryServer"]
-                    for name in server_names:
-                        mcp_env = settings_json.get("mcpServers", {}).get(name, {}).get("env", {})
-                        api_key = mcp_env.get("GOOGLE_API_KEY") or mcp_env.get("GEMINI_API_KEY")
-                        if api_key:
-                            self._api_key = api_key.strip()
-                            return self._api_key
-        except Exception as e:
-            logger.debug(f"Failed to read settings.json: {e}")
-
         return None
 
     @property
