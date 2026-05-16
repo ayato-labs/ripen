@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-05-16)
+
+### Features
+
+- Log version at startup and expand Docker docs in README
+  ([`da1639f`](https://github.com/ayato-labs/ripen/commit/da1639fe39eb51bb52bc02dd845e47a34c892430))
+
+
 ## v1.9.2 (2026-05-16)
 
 ### Bug Fixes
