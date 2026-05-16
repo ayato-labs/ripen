@@ -1,5 +1,0 @@
-{
-  "llm_provider": "gemini",
-  "google_api_key": "",
-  "sse_port": 8377
-}

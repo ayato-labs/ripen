@@ -153,6 +153,7 @@ Ripen prioritizes **system stability** over massive internal dependencies.
 
 ### Option A: Docker (Recommended for Engineers) 🐳
 The most stable and easiest way to run the Ripen Hub. No Python required. Works on Windows, Mac, and Linux.
+Data is persisted in a Docker named volume (`ripen_data`) to avoid SQLite lock issues on Windows.
 
 #### 1. Install (取得)
 ```bash
@@ -178,7 +179,7 @@ Use the provided `docker-compose.yml` to automatically handle volume mounting an
 **Method B: Docker Run**
 Run the container manually. By default, it runs in the foreground so you can see the logs immediately.
 ```bash
-docker run --name ripen-hub -p 8377:8377 -v ripen_data:/data ghcr.io/ayato-labs/ripen:latest
+docker run --name ripen-hub -p 8377:8377 -v ripen_data:/data -e GEMINI_API_KEY=your_api_key ghcr.io/ayato-labs/ripen:latest
 ```
 *Note: If you want to run it in the background, add the `-d` option.*
 
@@ -196,7 +197,7 @@ docker stop ripen-hub
 docker rename ripen-hub ripen-hub-old-20260516
 
 # 4. Start the new container with the same volume
-docker run --name ripen-hub -p 8377:8377 -v ripen_data:/data ghcr.io/ayato-labs/ripen:latest
+docker run --name ripen-hub -p 8377:8377 -v ripen_data:/data -e GEMINI_API_KEY=your_api_key ghcr.io/ayato-labs/ripen:latest
 ```
 *Note: If you want to run it in the background, add the `-d` option.*
 
