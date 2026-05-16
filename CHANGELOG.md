@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.8.3 (2026-05-16)
+
+### Bug Fixes
+
+- Pass tag_name explicitly to action-gh-release to fix tag missing error
+  ([`32c0475`](https://github.com/ayato-labs/ripen/commit/32c0475bb3f67ea4d1f9b60d2605d3a862ad4273))
+
+- Remove duplicate env block in main.yml
+  ([`a0affa6`](https://github.com/ayato-labs/ripen/commit/a0affa616a532c630db8f88ff8bbcc68ec780dcf))
+
+
 ## v1.8.2 (2026-05-16)
 
 ### Bug Fixes
