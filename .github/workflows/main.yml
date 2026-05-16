@@ -71,18 +71,28 @@ jobs:
         with:
           python-version: '3.11'
           enable-cache: true
-      - name: Install semantic-release
-        run: |
-          if [ ! -d ".venv" ]; then uv venv; fi
-          ls -la
-          uv pip install python-semantic-release
-      - name: Python Semantic Release
+      - name: Install and Run Semantic Release
         id: semantic
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if [ ! -d ".venv" ]; then uv venv; fi
+          uv pip install python-semantic-release
+          
+          PREV_VER=$(uv run semantic-release version --print)
+          echo "Previous version: $PREV_VER"
+          
           uv run semantic-release version
-          uv run semantic-release publish
+          
+          NEW_VER=$(uv run semantic-release version --print)
+          echo "New version: $NEW_VER"
+          
+          if [ "$PREV_VER" != "$NEW_VER" ]; then
+            echo "new_release_published=true" >> $GITHUB_OUTPUT
+            uv run semantic-release publish
+          else
+            echo "new_release_published=false" >> $GITHUB_OUTPUT
+          fi
 
   build_assets:
     name: Build Windows Assets
