@@ -59,11 +59,26 @@ Ripen operates purely as a centralized Hub. You host it once, and all your agent
 3. Run `ripen-hub.exe`. It will start the Streamable HTTP server on port `8377`.
 
 ### 2. Connect Your Agents
-Configure your AI agents to connect to the Hub's MCP endpoint: `http://localhost:8377/mcp` (or replace `localhost` with the Hub machine's IP address for team use).
+Configure your AI agents to connect to the Hub's MCP endpoint.
 
-*   **For Cursor / Windsurf / Any SSE Client**:
-    *   Add an MCP server of type `sse` (or "SSE", "Streamable HTTP").
-    *   URL: `http://localhost:8377/mcp`
+*   **For Cursor (Highly Recommended)**:
+    Add a new MCP server in Cursor settings with the following configuration:
+    - **Type**: `streamableHttp`
+    - **URL**: `http://localhost:8377/mcp`
+
+    Or directly edit your `mcp_config.json`:
+    ```json
+    "Ripen": {
+      "type": "streamableHttp",
+      "serverURL": "http://localhost:8377/mcp"
+    }
+    ```
+
+*   **For Team Use (Remote Connection)**:
+    If you are connecting from a different machine (Child PC) to a shared Hub (Parent PC), replace `localhost` with the Parent PC's actual IP address:
+    - **URL**: `http://<Parent_PC_IP>:8377/mcp`
+    
+    *Note: The Docker container is configured to listen on `0.0.0.0`, meaning it accepts connections from any IP address reaching the host machine.*
 
 ---
 
