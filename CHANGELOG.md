@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.13.3 (2026-05-17)
+
+### Bug Fixes
+
+- Run Windows tests on native .exe to fix Docker platform error
+  ([`59fa1fd`](https://github.com/ayato-labs/ripen/commit/59fa1fd9aa585283f7b41e80243f6931b6bf6041))
+
+
 ## v1.13.2 (2026-05-17)
 
 
