@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## v1.13.5 (2026-05-17)
+
+### Bug Fixes
+
+- Extend Gemini API timeout to 120s
+  ([`a7a0737`](https://github.com/ayato-labs/ripen/commit/a7a0737159e5e8ed5026b60c9a31a6a7a9fe6319))
+
+- Remove unused history argument from salvage_related_knowledge call
+  ([#131](https://github.com/ayato-labs/ripen/pull/131),
+  [`b66ca8e`](https://github.com/ayato-labs/ripen/commit/b66ca8e152826770ee2096c4f3445325490ce8ac))
+
+
 ## v1.13.4 (2026-05-17)
 
 ### Bug Fixes
