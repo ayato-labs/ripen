@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.18.0 (2026-05-17)
+
+### Chores
+
+- Update project configuration to require Python 3.11 and prune legacy platform dependencies from
+  lockfile
+  ([`c14d8ae`](https://github.com/ayato-labs/ripen/commit/c14d8ae80cfd70d1b674945dc4a81f107f155c82))
+
+### Features
+
+- Implement admin and main MCP server instances with AuthMiddleware and core tooling support
+  ([`38e8e4e`](https://github.com/ayato-labs/ripen/commit/38e8e4e52d173442ac11d315db56f06d4ff63443))
+
+
 ## v1.17.0 (2026-05-17)
 
 ### Features
