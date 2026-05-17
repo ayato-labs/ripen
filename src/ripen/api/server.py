@@ -320,6 +320,7 @@ def print_banner(mode: str, port: int):
         f"  \033[1;34m[Mode]\033[0m      {mode}",
         f"  \033[1;32m[Port]\033[0m      {port}",
         f"  \033[1;33m[LLM]\033[0m       {settings.llm_provider} ({settings.generative_model})",
+        f"  \033[1;33m[Embed]\033[0m     {settings.embedding_engine} ({settings.embedding_model})",
         f"  \033[1;36m[Data]\033[0m      {settings.base_dir}",
         f"  \033[1;35m[Dashboard]\033[0m http://localhost:{port}/dashboard",
         f"  \033[1;37m[License]\033[0m   {license_text}",
