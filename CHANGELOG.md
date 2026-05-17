@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.13.0 (2026-05-17)
+
+### Bug Fixes
+
+- Drop support for Python 3.10 and update matrix tests
+  ([`b4be804`](https://github.com/ayato-labs/ripen/commit/b4be804e9bb241699db595503859bae1145965a1))
+
+
 ## v1.12.0 (2026-05-16)
 
 
