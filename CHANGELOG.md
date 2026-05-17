@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.16.0 (2026-05-17)
+
+### Features
+
+- Implement high-speed knowledge retrieval salvage pipeline for CLI
+  ([`1d07dce`](https://github.com/ayato-labs/ripen/commit/1d07dce3191412a1c8e0aba54b7bab6b4d365399))
+
+
 ## v1.15.0 (2026-05-17)
 
 
