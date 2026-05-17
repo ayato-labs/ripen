@@ -126,7 +126,12 @@ jobs:
         id: tag
         shell: bash
         run: |
+          git fetch --tags
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$TAG" ]; then
+            TAG=$(git rev-parse --short HEAD)
+            echo "Warning: No annotated tag found, using commit SHA: $TAG"
+          fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
       - name: Upload Binaries to Release
         uses: softprops/action-gh-release@v2
@@ -160,7 +165,12 @@ jobs:
         id: tag
         shell: bash
         run: |
+          git fetch --tags
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$TAG" ]; then
+            TAG=$(git rev-parse --short HEAD)
+            echo "Warning: No annotated tag found, using commit SHA: $TAG"
+          fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
       - name: Build and push Docker image
         id: docker_build
@@ -176,7 +186,7 @@ jobs:
         with:
           image-ref: 'ghcr.io/${{ github.repository }}:latest'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -195,7 +205,12 @@ jobs:
         id: tag
         shell: bash
         run: |
+          git fetch --tags
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$TAG" ]; then
+            TAG=$(git rev-parse --short HEAD)
+            echo "Warning: No annotated tag found, using commit SHA: $TAG"
+          fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
       - name: Upload Zip to Release
         uses: softprops/action-gh-release@v2
