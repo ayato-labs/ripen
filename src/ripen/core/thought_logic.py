@@ -205,7 +205,7 @@ async def process_thought_core(
                 try:
                     # Give salvage 15 seconds max, it's not critical if it fails
                     related_knowledge = await asyncio.wait_for(
-                        salvage_related_knowledge(thought, session_id, history),
+                        salvage_related_knowledge(thought, session_id),
                         timeout=15.0
                     )
                 except TimeoutError:
