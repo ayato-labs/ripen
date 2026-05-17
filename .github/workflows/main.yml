@@ -233,6 +233,8 @@ jobs:
         run: |
           sed -i 's|ghcr.io/ayato-labs/ripen:latest|ghcr.io/${{ github.repository }}:latest|' docker-compose.yml
       - name: Start container
+        env:
+          GEMINI_API_KEY: dummy
         run: docker compose up -d
       - name: Wait for Health Check
         run: |
@@ -287,6 +289,9 @@ jobs:
           uv run pyinstaller --onefile --name Ripen --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/api/server.py
       - name: Start Ripen Server (.exe)
         shell: pwsh
+        env:
+          GEMINI_API_KEY: dummy
+          LLM_PROVIDER: gemini
         run: |
           $process = Start-Process -FilePath ".\dist\Ripen.exe" -ArgumentList "--port 8377" -PassThru -NoNewWindow
           echo "PROCESS_ID=$($process.Id)" >> $GITHUB_ENV
@@ -361,6 +366,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Start server
+        env:
+          GEMINI_API_KEY: dummy
+          LLM_PROVIDER: gemini
         run: |
           uv run python src/ripen/api/server.py &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
