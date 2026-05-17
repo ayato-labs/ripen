@@ -221,6 +221,11 @@ class IEmbeddingRepository(ABC):
         """Retrieve all stored embeddings for hybrid search."""
         pass
 
+    @abstractmethod
+    async def get_embeddings_iterator(self, chunk_size: int = 1000):
+        """Retrieve stored embeddings in chunks for memory-efficient hybrid search."""
+        pass
+
 
 class ITroubleshootingRepository(ABC):
     @abstractmethod

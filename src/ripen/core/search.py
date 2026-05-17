@@ -167,21 +167,12 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
     )
 
     try:
-        all_rows = await uow.embeddings.get_all_embeddings()
-
         query_vector = await task_vector
         keyword_results = await task_keyword
 
-        if not query_vector or not all_rows:
-            logger.debug(
-                f"Embed search skipped or not available. "
-                f"query_vector={bool(query_vector)}, all_rows={len(all_rows) if all_rows else 0}"
-            )
+        if not query_vector:
+            logger.debug("Embed search skipped: query_vector is empty.")
             return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
-
-        all_cids = [r["content_id"] for r in all_rows]
-        all_vectors = [json.loads(r["vector"]) for r in all_rows]
-        similarities = batch_cosine_similarity(query_vector, all_vectors)
 
         metadata_rows = await uow.metadata.get_all_metadata()
         meta_map = {m["content_id"]: (m["access_count"], m["last_accessed"]) for m in metadata_rows}
@@ -189,22 +180,33 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
         results = []
         seen_cids = set()
 
-        for i, cid in enumerate(all_cids):
-            sim = float(similarities[i])
-            count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
-            importance = calculate_importance(count, last)
-            k_res = next((r for r in keyword_results if r["id"] == cid), None)
-            k_score = k_res["score"] if k_res else 0.0
+        # Process embeddings in chunks to save memory
+        async for chunk in uow.embeddings.get_embeddings_iterator(chunk_size=1000):
+            all_cids = [r["content_id"] for r in chunk]
+            all_vectors = [json.loads(r["vector"]) for r in chunk]
+            similarities = batch_cosine_similarity(query_vector, all_vectors)
 
-            maturity = k_res["maturity"] if k_res else "STABLE"
-            maturity_boost = (
-                1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
-            )
+            for i, cid in enumerate(all_cids):
+                sim = float(similarities[i])
+                count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
+                importance = calculate_importance(count, last)
+                k_res = next((r for r in keyword_results if r["id"] == cid), None)
+                k_score = k_res["score"] if k_res else 0.0
 
-            final_score = ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
-            results.append((cid, final_score))
-            seen_cids.add(cid)
+                maturity = k_res["maturity"] if k_res else "STABLE"
+                maturity_boost = (
+                    1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
+                )
 
+                final_score = ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
+                results.append((cid, final_score))
+                seen_cids.add(cid)
+
+            # Keep only Top-K to avoid memory growth if there are many chunks
+            results.sort(key=lambda x: x[1], reverse=True)
+            results = results[:limit * 10]  # Keep a buffer larger than limit
+
+        # Add keyword results that were not in the embedding chunks
         for res in keyword_results:
             cid = res["id"]
             if cid not in seen_cids:

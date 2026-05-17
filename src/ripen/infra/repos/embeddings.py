@@ -39,3 +39,17 @@ class EmbeddingRepository(BaseSQLiteRepository, IEmbeddingRepository):
             WHERE (ent.status = 'active' OR bf.status = 'active')
         """)
         return await cursor.fetchall()
+
+    async def get_embeddings_iterator(self, chunk_size: int = 1000):
+        cursor = await self.conn.execute("""
+            SELECT e.content_id, e.vector
+            FROM embeddings e
+            LEFT JOIN entities ent ON e.content_id = ent.name
+            LEFT JOIN bank_files bf ON e.content_id = bf.filename
+            WHERE (ent.status = 'active' OR bf.status = 'active')
+        """)
+        while True:
+            rows = await cursor.fetchmany(chunk_size)
+            if not rows:
+                break
+            yield rows
