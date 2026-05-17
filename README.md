@@ -66,7 +66,7 @@ Configure your AI agents to connect to the Hub's MCP endpoint.
     - **Type**: `streamableHttp`
     - **URL**: `http://localhost:8377/mcp`
 
-    Or directly edit your `mcp_config.json`:
+    Or, if you prefer editing the configuration file (e.g., `mcp_config.json` or `mcp.json` depending on the tool) directly, add the following entry to your `"mcpServers"` section:
     ```json
     "Ripen": {
       "type": "streamableHttp",
