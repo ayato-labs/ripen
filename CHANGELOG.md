@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.13.4 (2026-05-17)
+
+### Bug Fixes
+
+- Consolidated pipeline fixes and model change to gemma4:e2b
+  ([#129](https://github.com/ayato-labs/ripen/pull/129),
+  [`53827ef`](https://github.com/ayato-labs/ripen/commit/53827efe2904cbc0d1168a8748b5400f0bcc1f10))
+
+
 ## v1.13.3 (2026-05-17)
 
 ### Bug Fixes
