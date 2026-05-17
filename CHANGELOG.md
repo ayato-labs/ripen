@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.13.1 (2026-05-17)
+
+### Bug Fixes
+
+- Allow Trivy scan to report without failing the build
+  ([`f305690`](https://github.com/ayato-labs/ripen/commit/f305690c4b502ac542b5c32d1c93383f2d1cf299))
+
+- Fetch tags and add fallback for release job
+  ([`a2ef116`](https://github.com/ayato-labs/ripen/commit/a2ef116aa9850e33d69513148ffb39edadf74367))
+
+
 ## v1.13.0 (2026-05-17)
 
 ### Bug Fixes
