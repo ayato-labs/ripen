@@ -1,6 +1,6 @@
 # Ripen: The "Trust Layer" for Multi-Agent AI Teams 🧠
 
-**Centralized Knowledge Hub for AI-Driven Development. Designed for Local and Small-Team workflows.**
+**Centralized Knowledge Server for AI-Driven Development. Designed for Local and Small-Team workflows.**
 
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Beta-orange)](CHANGELOG.md)
@@ -8,7 +8,7 @@
 [![Download Official Binary](https://img.shields.io/badge/Download-Official%20Ripen.exe-brightgreen?style=for-the-badge&logo=github)](https://github.com/ayato-labs/ripen/releases)
 
 > [!IMPORTANT]
-> **Official Distribution**: We strongly recommend running the Ripen Hub via **Docker**. For Windows users who prefer it, standalone `.exe` binaries are also available in the [Official GitHub Releases](https://github.com/ayato-labs/ripen/releases).
+> **Official Distribution**: We strongly recommend running the Ripen Server via **Docker**. For Windows users who prefer it, standalone `.exe` binaries are also available in the [Official GitHub Releases](https://github.com/ayato-labs/ripen/releases).
 
 > [!NOTE]
 > **Distribution Policy**: To provide the best developer experience and maximize multi-platform compatibility, our primary distribution method is **Docker Container Images via GHCR**. PyPI distribution has been discontinued.
@@ -28,18 +28,18 @@
 
 Most MCP memory servers run in `stdio` mode — a 1:1 connection between **one IDE and one server**. Knowledge stays siloed inside that single process, invisible to any other tool or person.
 
-**Ripen runs as a Streamable HTTP Hub** — an HTTP server that accepts **N:1 connections**. Multiple agents, multiple IDEs, multiple teammates on **different machines with different accounts**, all reading and writing to the same shared brain simultaneously.
+**Ripen runs as a Streamable HTTP Server** — an HTTP server that accepts **N:1 connections**. Multiple agents, multiple IDEs, multiple teammates on **different machines with different accounts**, all reading and writing to the same shared brain simultaneously.
 
 > **Note on Scale**: Ripen is currently optimized for **local multi-agent usage or small teams (2-3 people)**. It uses SQLite + WAL mode under the hood, which provides excellent local concurrency but is not designed for high-throughput network writes from large distributed teams.
 
 > **Privacy Warning**: Ripen uses background processes (`incremental_distill_knowledge`) to organize memory. **If you configure an external LLM (like Gemini or OpenAI), snippets of your codebase and prompts may be sent to these external APIs.** For strict enterprise environments, we strongly recommend using a local LLM via Ollama.
 
 ```text
-[Typical MCP Memory]                    [Ripen Hub Mode]
+[Typical MCP Memory]                    [Ripen Server Mode]
 
 Dev A: Cursor   -- memory-A             Dev A: Cursor     ----+
 Dev A: Claude   -- memory-B             Dev A: Antigravity ---+
-                                        Dev B: Windsurf    ---+--> Ripen HTTP Hub
+                                        Dev B: Windsurf    ---+--> Ripen HTTP Server
 Dev B: Cursor   -- memory-C             Dev B: Gemini CLI  ---+
                                         CI Agent -------------+
   No shared knowledge                   Zero manual sync
@@ -51,15 +51,15 @@ This is the **core innovation**: automated cross-agent, cross-user, cross-machin
 
 ## Quick Start
 
-Ripen operates purely as a centralized Hub. You host it once, and all your agents connect to it.
+Ripen operates purely as a centralized Server. You host it once, and all your agents connect to it.
 
-### 1. Start the Hub
+### 1. Start the Server
 1. Download `ripen-hub.exe` and `ripen-admin.exe` from the latest release.
-2. Set the `GOOGLE_API_KEY` (or other provider keys) in the environment variables on the machine running the Hub. **Clients do not need to hold any API keys.**
+2. Set the `GOOGLE_API_KEY` (or other provider keys) in the environment variables on the machine running the Server. **Clients do not need to hold any API keys.**
 3. Run `ripen-hub.exe`. It will start the Streamable HTTP server on port `8377`.
 
 ### 2. Connect Your Agents
-Configure your AI agents to connect to the Hub's MCP endpoint.
+Configure your AI agents to connect to the Ripen Server's MCP endpoint.
 
 *   **For Cursor (Highly Recommended)**:
     Add a new MCP server in Cursor settings with the following configuration:
@@ -75,8 +75,8 @@ Configure your AI agents to connect to the Hub's MCP endpoint.
     ```
 
 *   **For Team Use (Remote Connection)**:
-    If you are connecting from a different machine (Child PC) to a shared Hub (Parent PC), replace `localhost` with the Parent PC's actual IP address:
-    - **URL**: `http://<Parent_PC_IP>:8377/mcp`
+    If you are connecting from a different machine (Client PC) to a shared Ripen Server (Server Host PC), replace `localhost` with the Server Host PC's actual IP address:
+    - **URL**: `http://<Server_Host_PC_IP>:8377/mcp`
     
     *Note: The Docker container is configured to listen on `0.0.0.0`, meaning it accepts connections from any IP address reaching the host machine.*
 
@@ -95,23 +95,23 @@ The faster you ship, the faster your AI tools **diverge**. Ripen stops this drif
 
 ---
 
-## Architecture: Pure Hub Model
+## Architecture: Pure Server Model
 
-Ripen provides a unified HTTP Hub endpoint. No proprietary client proxies are needed.
+Ripen provides a unified HTTP Server endpoint. No proprietary client proxies are needed.
 
 ```mermaid
 graph TD
-    subgraph "Parent PC (The Hub)"
-        H["🧠 Ripen Streamable HTTP Hub\n(port 8377)"]
+    subgraph "Server Host PC (Ripen Server)"
+        H["🧠 Ripen Streamable HTTP Server\n(port 8377)"]
         H --> DB["SQLite + FAISS\n(local, private)"]
         H --> DASH["Dashboard\nlocalhost:8377/dashboard"]
     end
 
-    subgraph "Child PC (Team Member A)"
+    subgraph "Client PC (Team Member A)"
         A1["Cursor (Streamable HTTP)"] -- "Direct HTTP" --> H
     end
 
-    subgraph "Child PC (Team Member B)"
+    subgraph "Client PC (Team Member B)"
         B1["Claude Code (Stdio)"] -- "Standard Bridge (e.g. mcp-remote)" --> H
     end
 ```
@@ -132,7 +132,7 @@ graph TD
 ### 3. Zero-Config by Design
 - LLM not configured? Core search, graph, and Memory Bank still work fully.
 - Config priority: `Environment Variable` > `~/.ripen/config.json` > Defaults.
-- Hub startup prints a summary of active services and the connection URL.
+- Server startup prints a summary of active services and the connection URL.
 
 ### 4. Professional CLI
 | Command | Role |
@@ -144,13 +144,13 @@ graph TD
 Visit `http://localhost:8377/dashboard` to see:
 - **Active Agents**: Which IDEs/tools are currently connected
 - **Knowledge Flow**: Real-time activity timeline
-- **Hub Status**: Real-time status of AI Brain (LLM) and Memory Bank (Vector DB)
+- **Server Status**: Real-time status of AI Brain (LLM) and Memory Bank (Vector DB)
 
 ### 6. Reliability & Health Monitoring (Plan A Strategy)
 Ripen prioritizes **system stability** over massive internal dependencies.
-- **Proactive Health Checks**: The Hub automatically detects if Ollama or Gemini are available.
+- **Proactive Health Checks**: The Server automatically detects if Ollama or Gemini are available.
 - **Zero-Crash Lifespan**: Instead of failing silently or crashing during heavy inference, Ripen provides clear visual warnings in the Dashboard and CLI if a backend is missing.
-- **Dependency-Clean**: By leveraging FastEmbed for retrieval and "Bringing Your Own LLM" for reasoning, we ensure the Hub remains lightweight enough to run in the background of any 16GB RAM development machine.
+- **Dependency-Clean**: By leveraging FastEmbed for retrieval and "Bringing Your Own LLM" for reasoning, we ensure the Server remains lightweight enough to run in the background of any 16GB RAM development machine.
 
 ---
 
@@ -167,7 +167,7 @@ Ripen prioritizes **system stability** over massive internal dependencies.
 ## Installation
 
 ### Option A: Docker (Recommended for Engineers) 🐳
-The most stable and easiest way to run the Ripen Hub. No Python required. Works on Windows, Mac, and Linux.
+The most stable and easiest way to run the Ripen Server. No Python required. Works on Windows, Mac, and Linux.
 Data is persisted in a Docker named volume (`ripen_data`) to avoid SQLite lock issues on Windows.
 
 #### 1. Install (取得)
@@ -271,7 +271,7 @@ PYTHONPATH=src uv run python -m ripen.api.server
 ## 🇯🇵 日本語
 
 ### 他のMCPメモリサーバーとの根本的な違い
-Ripen は「1対1」ではなく「N対1」の接続を前提とした**ナレッジ・ハブ**です。
+Ripen は「1対1」ではなく「N対1」の接続を前提とした**ナレッジ・サーバー**です。
 *   **従来**: 1つのIDEごとに独立したメモリ（知識が分散する）。
 *   **Ripen**: 全員が1つの「共有ブレイン」に接続（知識がリアルタイムで同期する）。
 
@@ -279,9 +279,9 @@ Ripen は「1対1」ではなく「N対1」の接続を前提とした**ナレ�
 
 ### 🌐 チーム開発：メンバーの接続手順
 
-管理者が構築した共有ハブに接続するためのガイドです。
+管理者が構築した共有サーバーに接続するためのガイドです。
 
-管理者から親機の URL （例: `http://192.168.1.50:8377/mcp`）を共有してもらいます。
+管理者からサーバーの URL （例: `http://192.168.1.50:8377/mcp`）を共有してもらいます。
 
 #### 2. 接続設定
 各 AI ツールに、以下の設定を入力します。
@@ -313,7 +313,7 @@ Ripen は「1対1」ではなく「N対1」の接続を前提とした**ナレ�
 Ripen provides a REST API alongside its MCP server endpoint. This allows HTTP clients, custom webhooks, or agents (e.g. Dify workflows, custom CI/CD scripts, or `curl` calls) to interact with the shared memory bank directly.
 
 ### 1. Save Memory
-Saves a new memory into the hub. You can also specify an optional agent identifier.
+Saves a new memory into the server. You can also specify an optional agent identifier.
 
 *   **Endpoint**: `POST /api/v1alpha2/memories`
 *   **Headers**:

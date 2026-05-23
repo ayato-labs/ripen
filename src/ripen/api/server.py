@@ -403,6 +403,7 @@ def print_banner(mode: str, port: int, version: str):
         f"  \033[1;36m[Data]\033[0m      {settings.base_dir}",
         f"  \033[1;35m[Dashboard]\033[0m http://localhost:{port}/dashboard",
         f"  \033[1;37m[License]\033[0m   {license_text}",
+        "  \033[1;31m[Disclaimer]\033[0m Beta Trial Version - Provided 'AS IS'. See EULA.md",
         "\033[1;32m" + "=" * 60 + "\033[0m",
         ""
     ]
@@ -470,7 +471,22 @@ def main():
     # Load plugins before starting
     logger.info("Loading plugins...")
     PluginLoader.load_all(context={"settings": settings})
-    logger.info("Plugins loaded. Printing banner...")
+    logger.info("Plugins loaded. Checking license activation...")
+    
+    # License Enforcement
+    lm = LicenseManager()
+    if not lm.validate_locally():
+        sys.stderr.write(
+            "\033[1;31m[CRITICAL ERROR] License or Beta Trial Period Expired!\033[0m\n"
+        )
+        sys.stderr.write(
+            "The beta trial period has expired. "
+            "Continued usage requires a valid license.\n"
+        )
+        sys.stderr.write("Please check EULA.md for licensing terms or contact support.\n")
+        sys.exit(1)
+
+    logger.info("License verified. Printing banner...")
     print_banner("Streamable HTTP", port, version)
     logger.info("Banner printed. Running FastMCP server...")
     mcp.run(transport="streamable-http", host=args.host, port=port, show_banner=False)
