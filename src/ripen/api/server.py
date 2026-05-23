@@ -14,9 +14,11 @@ if CURRENT_SRC not in sys.path:
     sys.path.insert(0, CURRENT_SRC)
 
 from fastmcp import FastMCP
+from starlette.middleware import Middleware
 
 # Import project modules
 from ripen.api import dashboard
+from ripen.api.auth import AuthMiddleware, get_current_user
 from ripen.api.licensing import LicenseManager
 from ripen.common.config import settings
 from ripen.common.plugins import PluginLoader
@@ -48,13 +50,8 @@ mcp = FastMCP(
     version="3.2.4",
 )
 
-from ripen.api.auth import AuthMiddleware, get_current_user
-
-if hasattr(mcp, "app"):
-    logger.info("Applying AuthMiddleware to mcp.app")
-    mcp.app.add_middleware(AuthMiddleware)
-else:
-    logger.warning("mcp instance does not have 'app' attribute. Could not apply AuthMiddleware.")
+logger.info("Applying AuthMiddleware to mcp")
+mcp.add_middleware(Middleware(AuthMiddleware))
 
 
 
@@ -131,6 +128,78 @@ async def dashboard_api_health(request):
 @mcp.custom_route("/api/license/activate", methods=["POST"])
 async def dashboard_api_license_activate(request):
     return await dashboard.api_activate_license(request)
+
+@mcp.custom_route("/api/v1alpha2/memories", methods=["POST"])
+async def api_save_memory(request):
+    """
+    REST API endpoint to save memory.
+    Equivalent to the save_memory tool.
+    """
+    from starlette.responses import JSONResponse
+    
+    # Headers check for agent_id (Starlette headers are case-insensitive)
+    agent_id = request.headers.get("x-ripen-agent-id") or request.headers.get("x-agent-id")
+    if not agent_id:
+        agent_id = get_current_user()
+
+    if not agent_id:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "Authentication required. Please provide a valid API key.",
+            },
+            status_code=401
+        )
+
+    try:
+        body = await request.json()
+        entities = body.get("entities")
+        relations = body.get("relations")
+        observations = body.get("observations")
+        bank_files = body.get("bank_files")
+
+        if entities is None or relations is None or observations is None:
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "Missing required fields: entities, relations, observations",
+                },
+                status_code=400
+            )
+
+        await logic_module.save_memory_core(
+            entities=entities,
+            relations=relations,
+            observations=observations,
+            bank_files=bank_files,
+            agent_id=agent_id,
+        )
+        return JSONResponse(
+            {"status": "success", "message": "Knowledge successfully persisted to the hub."}
+        )
+    except Exception as e:
+        logger.exception("Failed to save memory via REST API")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@mcp.custom_route("/api/v1alpha2/memories", methods=["GET"])
+async def api_read_memory(request):
+    """
+    REST API endpoint to search memories.
+    Equivalent to the read_memory tool.
+    """
+    from starlette.responses import JSONResponse
+    query = request.query_params.get("query", "")
+    try:
+        # Perform hybrid search
+        results = await logic_module.read_memory_core(query)
+        if not results:
+            return JSONResponse({"status": "success", "results": []})
+        return JSONResponse({"status": "success", "results": results})
+    except Exception as e:
+        logger.exception("Failed to read memory via REST API")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
 
 # --- TOOLS ---
 

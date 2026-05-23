@@ -3,22 +3,8 @@ from typing import Any
 import aiosqlite
 
 from ripen.infra.database import AsyncSQLiteConnection, get_write_semaphore, init_db
-from ripen.infra.repos import (
-    AuditRepository,
-    BankRepository,
-    ConflictRepository,
-    EmbeddingRepository,
-    EntityRepository,
-    GraphRepository,
-    ManagementRepository,
-    MetadataRepository,
-    ObservationRepository,
-    RelationRepository,
-    SearchRepository,
-    TagRepository,
-    ThoughtRepository,
-    TroubleshootingRepository,
-)
+from ripen.infra.repos_registry import repos_registry
+from ripen.infra.repository_base import IManagementRepository
 
 
 class UnitOfWork:
@@ -31,14 +17,16 @@ class UnitOfWork:
         self.is_thoughts = is_thoughts
         self._conn: aiosqlite.Connection | None = None
         self._semaphore = get_write_semaphore(is_thoughts)
-        self._management: ManagementRepository | None = None
+        self._management: IManagementRepository | None = None
 
     async def __aenter__(self):
         from ripen.common.utils import get_logger
         log = get_logger("uow")
         log.debug(f"UOW_START: is_thoughts={self.is_thoughts}")
         
-        if self.is_thoughts:
+        if repos_registry.connection_factory:
+            self._conn = await repos_registry.connection_factory(self.is_thoughts)
+        elif self.is_thoughts:
             from ripen.common.utils import get_thoughts_db_path
             from ripen.core.thought_logic import init_thoughts_db
 
@@ -53,26 +41,26 @@ class UnitOfWork:
             self._conn = await AsyncSQLiteConnection(get_db_path()).__aenter__()
 
         log.debug("UOW_READY: Connection acquired and repositories bound")
-        # Initialize repositories with this connection
-        self.bank = BankRepository(self._conn)
-        self.audit = AuditRepository(self._conn)
-        self.entities = EntityRepository(self._conn)
-        self.relations = RelationRepository(self._conn)
-        self.observations = ObservationRepository(self._conn)
-        self.conflicts = ConflictRepository(self._conn)
-        self.embeddings = EmbeddingRepository(self._conn)
-        self.troubleshooting = TroubleshootingRepository(self._conn)
-        self.tags = TagRepository(self._conn)
-        self.graph = GraphRepository(self._conn)
-        self.search = SearchRepository(self._conn)
-        self.thoughts = ThoughtRepository(self._conn)
-        self.metadata = MetadataRepository(self._conn)
-        self._management = ManagementRepository(self._conn)
+        # Initialize repositories with this connection using repos_registry
+        self.bank = repos_registry.create_bank_repository(self._conn)
+        self.audit = repos_registry.create_audit_repository(self._conn)
+        self.entities = repos_registry.create_entity_repository(self._conn)
+        self.relations = repos_registry.create_relation_repository(self._conn)
+        self.observations = repos_registry.create_observation_repository(self._conn)
+        self.conflicts = repos_registry.create_conflict_repository(self._conn)
+        self.embeddings = repos_registry.create_embedding_repository(self._conn)
+        self.troubleshooting = repos_registry.create_troubleshooting_repository(self._conn)
+        self.tags = repos_registry.create_tag_repository(self._conn)
+        self.graph = repos_registry.create_graph_repository(self._conn)
+        self.search = repos_registry.create_search_repository(self._conn)
+        self.thoughts = repos_registry.create_thought_repository(self._conn)
+        self.metadata = repos_registry.create_metadata_repository(self._conn)
+        self._management = repos_registry.create_management_repository(self._conn)
 
         return self
 
     @property
-    def management(self) -> ManagementRepository:
+    def management(self) -> IManagementRepository:
         return self._management
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

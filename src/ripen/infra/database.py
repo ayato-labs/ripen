@@ -183,6 +183,11 @@ async def close_all_connections():
     Closes all singleton connections. Should be called during server shutdown
     or between tests to ensure isolation.
     """
+    from ripen.infra.repos_registry import repos_registry
+    if repos_registry.db_close_hook:
+        await repos_registry.db_close_hook()
+        return
+
     global _MAIN_CONNECTION, _THOUGHTS_CONNECTION, _DB_INITIALIZED
     logger.info("Closing all singleton database connections...")
     async with _get_init_lock():
@@ -610,6 +615,11 @@ async def _recover_database(db_path: str):
 
 
 async def init_db(force: bool = False):
+    from ripen.infra.repos_registry import repos_registry
+    if repos_registry.db_init_hook:
+        await repos_registry.db_init_hook(force)
+        return
+
     global _DB_INITIALIZED
     if force:
         _DB_INITIALIZED = False

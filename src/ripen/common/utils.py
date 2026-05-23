@@ -75,7 +75,7 @@ def configure_logging():
     # 2. Structured Error Log (Quarantine)
     # Only stores ERROR and higher, separate from main logs, JSON formatted
     logger.add(
-        log_dir / "error.jsonl",
+        log_dir / "error.log",
         level="ERROR",
         serialize=True,
         rotation="10 MB",

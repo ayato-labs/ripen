@@ -114,6 +114,13 @@ async def api_activate_license(request):
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 
+async def api_graph(_request):
+    from ripen.core import graph
+    async with UnitOfWork() as uow:
+        data = await graph.get_graph_data(uow, limit=50)
+    return JSONResponse(data)
+
+
 router = Router(
     [
         Route("/", get_dashboard_html, methods=["GET"]),
@@ -122,5 +129,6 @@ router = Router(
         Route("/api/resolve/{id:int}", api_resolve_conflict, methods=["POST"]),
         Route("/api/health", api_health, methods=["GET"]),
         Route("/api/license/activate", api_activate_license, methods=["POST"]),
+        Route("/api/graph", api_graph, methods=["GET"]),
     ]
 )

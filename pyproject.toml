@@ -77,8 +77,6 @@ target-version = "py311"
 src = ["src", "tests"]
 # Exclude non-relevant files
 exclude = [
-    "tests_backup/",
-    "scratch/",
     ".venv",
     "venv",
     "build",
@@ -114,6 +112,9 @@ ignore = [
     "E402",    # Module level import not at top of file
     "B008",    # Do not perform function call in argument defaults
     "SLF001",  # Private member access (often needed in repo patterns)
+    "RUF002",  # Docstring contains ambiguous characters (Japanese)
+    "RUF003",  # Comment contains ambiguous characters (Japanese)
+    "RUF013",  # Implicit Optional
 ]
 
 [tool.ruff.lint.isort]
@@ -121,9 +122,11 @@ combine-as-imports = true
 known-first-party = ["ripen"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*" = ["ARG001", "ARG002", "S101", "RUF001", "RUF002", "RUF003", "T201"]
+"tests/**/*" = ["ARG001", "ARG002", "S101", "RUF001", "RUF002", "RUF003", "T201", "E501", "C901", "PLR0912", "PLR0915"]
 "src/ripen/api/licensing.py" = ["PLR0911"]
-"scripts/**/*" = ["T201", "E501", "C901"]
+"scripts/**/*" = ["T201", "E501", "C901", "PLR0912", "PLR0915"]
+"scratch/**/*" = ["T201", "E501", "C901", "PLR0912", "PLR0915", "ARG001", "ARG002", "S101"]
+"tests_backup/**/*" = ["T201", "E501", "C901", "PLR0912", "PLR0915", "ARG001", "ARG002", "S101"]
 
 
 [tool.pytest.ini_options]

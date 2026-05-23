@@ -234,6 +234,12 @@
                             <div class="empty-state">Loading timeline...</div>
                         </div>
                     </div>
+                    <div class="card">
+                        <h2 class="section-title">Knowledge Graph (Limited)</h2>
+                        <div id="graph-container" style="font-size: 0.875rem; color: var(--text-secondary);">
+                            <div class="empty-state">Loading graph data...</div>
+                        </div>
+                    </div>
                 </main>
                 <aside>
                     <div class="card">
@@ -324,6 +330,59 @@
                             </div>
                         `).join('');
                     }
+                });
+
+            // Fetch graph data
+            fetch('./api/graph')
+                .then(res => res.json())
+                .then(data => {
+                    const graphContainer = document.getElementById('graph-container');
+                    if (!data || (!data.entities && !data.relations)) {
+                        graphContainer.innerHTML = '<div class="empty-state">No graph data available.</div>';
+                        return;
+                    }
+
+                    let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">';
+                    
+                    // Entities
+                    html += '<div><h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-primary);">Entities</h3>';
+                    if (data.entities && data.entities.length > 0) {
+                        html += '<ul style="list-style: none;">';
+                        data.entities.forEach(entity => {
+                            let descHtml = '';
+                            if (entity.description) {
+                                descHtml = '<div style="font-size: 0.75rem; color: var(--text-secondary);">' + entity.description + '</div>';
+                            }
+                            html += '<li style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 8px; margin-bottom: 0.5rem;">' +
+                                '<div style="font-weight: 600; color: var(--accent-secondary);">' + entity.name + '</div>' +
+                                '<div style="font-size: 0.75rem;">Type: ' + entity.entity_type + '</div>' +
+                                descHtml +
+                            '</li>';
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += '<div class="empty-state">No entities.</div>';
+                    }
+                    html += '</div>';
+
+                    // Relations
+                    html += '<div><h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-primary);">Relations</h3>';
+                    if (data.relations && data.relations.length > 0) {
+                        html += '<ul style="list-style: none;">';
+                        data.relations.forEach(rel => {
+                            html += '<li style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 8px; margin-bottom: 0.5rem;">' +
+                                '<div style="font-size: 0.8rem;"><span style="color: var(--accent-primary);">' + rel.subject + '</span> ➡️ <span style="color: var(--accent-secondary);">' + rel.object + '</span></div>' +
+                                '<div style="font-size: 0.75rem; font-weight: 600; color: var(--warning);">' + rel.predicate + '</div>' +
+                            '</li>';
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += '<div class="empty-state">No relations.</div>';
+                    }
+                    html += '</div>';
+
+                    html += '</div>';
+                    graphContainer.innerHTML = html;
                 });
         }
 

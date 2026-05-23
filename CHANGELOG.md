@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.14.0 (2026-05-23)
+
+### Features
+
+- Implement a multi-client REST API (`/api/v1alpha2/memories`) to allow third-party systems like Dify, webhooks, or `curl` to directly read and write shared memories.
+
+### Refactoring
+
+- Decouple the database layer by introducing a dynamic repository and connection factory registry (`RepositoryRegistry`). This allows plugging in alternative backends (such as PostgreSQL for high concurrency and production scale) in enterprise editions.
+- Integrate repository resolution via `RepositoryRegistry` within `UnitOfWork` and database setup.
+
 ## v1.13.5 (2026-05-17)
 
 ### Bug Fixes

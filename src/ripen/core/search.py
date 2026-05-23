@@ -197,8 +197,9 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
                 maturity_boost = (
                     1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
                 )
-
-                final_score = ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
+                final_score = (
+                    ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
+                )
                 results.append((cid, final_score))
                 seen_cids.add(cid)
 
