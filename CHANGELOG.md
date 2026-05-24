@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.18.1 (2026-05-24)
+
+### Bug Fixes
+
+- Run build assets and test jobs on any main push
+  ([`96533b8`](https://github.com/ayato-labs/ripen/commit/96533b82f009f4e8653917bd4807f2e0f591aa8b))
+
+### Refactoring
+
+- Discontinue Docker and simplify CI/CD to build Windows exe only
+  ([`65f81a6`](https://github.com/ayato-labs/ripen/commit/65f81a6184838b4f7e3be8306548d2e026738527))
+
+
 ## v1.18.0 (2026-05-17)
 
 ### Chores
