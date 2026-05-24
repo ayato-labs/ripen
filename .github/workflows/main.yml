@@ -121,10 +121,16 @@ jobs:
           ls -la
           uv pip install -e .
           uv pip install pyinstaller
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (Release)
+        if: github.ref == 'refs/heads/main'
         run: |
           uv run pyinstaller --onefile --name Ripen --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/api/server.py
           uv run pyinstaller --onefile --name RipenInit --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/cli/init.py
+      - name: Build with PyInstaller (Dev / PR)
+        if: github.ref != 'refs/heads/main'
+        run: |
+          uv run pyinstaller --onefile --name Ripen-dev --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/api/server.py
+          uv run pyinstaller --onefile --name RipenInit-dev --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/cli/init.py
       - name: Get Latest Tag
         id: tag
         shell: bash
@@ -154,9 +160,26 @@ jobs:
         with:
           name: ripen-windows-binaries-${{ github.sha }}
           path: |
-            dist/Ripen.exe
-            dist/RipenInit.exe
+            dist/Ripen-dev.exe
+            dist/RipenInit-dev.exe
           retention-days: 7
+      - name: Upload Binaries to Pre-Release (dev-latest)
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+        with:
+          files: |
+            dist/Ripen-dev.exe
+            dist/RipenInit-dev.exe
+          tag_name: dev-latest
+          name: "Development Build (dev-latest)"
+          body: |
+            This is an automated pre-release build of the `develop` branch.
+            Latest update: ${{ github.event.head_commit.message }} (commit: ${{ github.sha }})
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
 
