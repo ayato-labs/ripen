@@ -145,121 +145,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build_docker:
-    name: Build and Push Docker Image
-    needs: release
-    # Only run when a new release is actually published
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.PAT_TOKEN }}
-      - name: Get Latest Tag
-        id: tag
-        shell: bash
-        run: |
-          git fetch --tags
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$TAG" ]; then
-            TAG=$(git rev-parse --short HEAD)
-            echo "Warning: No annotated tag found, using commit SHA: $TAG"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-      - name: Build and push Docker image
-        id: docker_build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.tag.outputs.tag }}
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository }}:latest'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
 
-  build_zip_assets:
-    name: Build Zip Assets
-    needs: release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create Zip
-        run: |
-          zip ripen-docker-setup.zip docker-compose.yml .env.example
-      - name: Get Latest Tag
-        id: tag
-        shell: bash
-        run: |
-          git fetch --tags
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$TAG" ]; then
-            TAG=$(git rev-parse --short HEAD)
-            echo "Warning: No annotated tag found, using commit SHA: $TAG"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-      - name: Upload Zip to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ripen-docker-setup.zip
-          tag_name: ${{ steps.tag.outputs.tag }}
-          fail_on_unmatched_files: true
-          append_body: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  test_linux:
-    name: Integration & E2E Test (Linux Docker)
-    needs: build_docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Replace image in docker-compose.yml
-        run: |
-          sed -i 's|ghcr.io/ayato-labs/ripen:latest|ghcr.io/${{ github.repository }}:latest|' docker-compose.yml
-      - name: Start container
-        run: docker compose up -d
-      - name: Wait for Health Check
-        run: |
-          timeout=30
-          while [ $timeout -gt 0 ]; do
-            if curl -s http://localhost:8377/api/health | grep -q "ok"; then
-              echo "Server is healthy!"
-              exit 0
-            fi
-            sleep 1
-            timeout=$((timeout-1))
-          done
-          echo "Timeout waiting for health check"
-          exit 1
-      - name: E2E Test (Initialize MCP)
-        run: |
-          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "e2e-test", "version": "1.0.0"}}}' http://localhost:8377/mcp)
-          echo "Response: $RESPONSE"
-          if echo "$RESPONSE" | grep -q "protocolVersion"; then
-            echo "MCP Initialize successful!"
-          else
-            echo "MCP Initialize failed"
-            exit 1
-          fi
-      - name: Stop container
-        if: always()
-        run: docker compose down
 
   test_windows:
     name: Integration & E2E Test (Windows Native)
@@ -345,7 +231,7 @@ jobs:
 
   test_macos:
     name: Integration Test (macOS Native)
-    needs: build_docker
+    needs: release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
     runs-on: macos-latest
     steps:
