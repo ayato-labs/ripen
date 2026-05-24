@@ -97,7 +97,7 @@ jobs:
     name: Build Windows Assets
     needs: release
     # Only run when a new release is actually published
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,6 +135,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
       - name: Upload Binaries to Release
         uses: softprops/action-gh-release@v2
+        if: needs.release.outputs.new_release_published == 'true'
         with:
           files: |
             dist/Ripen.exe
@@ -150,7 +151,7 @@ jobs:
   test_windows:
     name: Integration & E2E Test (Windows Native)
     needs: release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -232,7 +233,7 @@ jobs:
   test_macos:
     name: Integration Test (macOS Native)
     needs: release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
