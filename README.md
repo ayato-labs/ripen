@@ -256,8 +256,14 @@ docker volume rm ripen_data
 
 ### Option B: Native Binary (Windows Only) 🚀
 For Windows users who prefer a standalone executable.
-1. Download `Ripen.exe` and `RipenInstaller.exe` from [GitHub Releases](https://github.com/ayato-labs/ripen/releases).
-2. Run `Ripen.exe` to start the server.
+1. Download `Ripen.exe`, `RipenInstaller.exe`, and `RipenInit.exe` from [GitHub Releases](https://github.com/ayato-labs/ripen/releases).
+2. **Initial Setup (Mandatory)**: Before running the main server, run `RipenInit.exe` to launch the interactive setup wizard. It will guide you through configuring:
+   - **Data Directory**: The local path where databases and vectors are stored (Default: `~/.ripen/`).
+   - **LLM Provider**: Choose between `gemini`, `ollama`, or `none`.
+   - **Credentials**: Enter your Google Gemini API Key (if `gemini` is selected) or local Ollama URL & model details (if `ollama` is selected).
+   
+   This wizard automatically generates `~/.ripen/config.json`.
+3. **Start the Hub**: Run `Ripen.exe` to start the Streamable HTTP server. It will automatically load the configuration from `config.json` on startup.
 
 ### Option C: Python (Source)
 ```bash
@@ -273,6 +279,23 @@ PYTHONPATH=src uv run python -m ripen.api.server
 Ripen は「1対1」ではなく「N対1」の接続を前提とした**ナレッジ・ハブ**です。
 *   **従来**: 1つのIDEごとに独立したメモリ（知識が分散する）。
 *   **Ripen**: 全員が1つの「共有ブレイン」に接続（知識がリアルタイムで同期する）。
+
+---
+
+### 🚀 ハブの起動手順（管理者・ホストPC向け）
+
+Windows環境でネイティブバイナリ（.exe）を使用して共有のナレッジハブを起動する手順です。
+
+1. [GitHub Releases](https://github.com/ayato-labs/ripen/releases) から `Ripen.exe`、`RipenInstaller.exe`、および `RipenInit.exe` をダウンロードします。
+2. **初期セットアップ（必須）**: 
+   メインサーバーを起動する前に、まず `RipenInit.exe` を実行して対話式のセットアップウィザードを完了させてください。ウィザードでは以下の項目を設定します。
+   - **データ保存先**: データベースやベクトルデータなどを保存するローカルディレクトリ（デフォルト: `~/.ripen/`）。
+   - **LLMプロバイダ**: 知識の整理・蒸留に使用する LLM（`gemini` / `ollama` / `none`）。
+   - **APIキー/接続設定**: `gemini` 選択時は Google API キーの入力、`ollama` 選択時は Ollama の接続 URL とモデル名の入力。
+   
+   この操作により、自動的に設定ファイル `~/.ripen/config.json` が生成されます。
+3. **サーバーの起動**:
+   `Ripen.exe` を実行して Streamable HTTP サーバーを起動します。起動時に `config.json` の設定が自動的に読み込まれます。
 
 ---
 
