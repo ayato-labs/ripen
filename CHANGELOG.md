@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.19.1 (2026-05-24)
+
+### Bug Fixes
+
+- Ensure terminal does not close abruptly on fatal error
+  ([`fb63ccd`](https://github.com/ayato-labs/ripen/commit/fb63ccd1cf4a37e6f1634708e77561ba78116c30))
+
+
 ## v1.19.0 (2026-05-24)
 
 ### Bug Fixes
