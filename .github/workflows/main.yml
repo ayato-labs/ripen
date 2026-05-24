@@ -122,6 +122,7 @@ jobs:
         run: |
           uv run pyinstaller --onefile --name Ripen --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/api/server.py
           uv run pyinstaller --onefile --name RipenInstaller --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/cli/register.py
+          uv run pyinstaller --onefile --name RipenInit --copy-metadata fastmcp --copy-metadata ripen --collect-all fastembed --collect-all faiss --clean src/ripen/cli/init.py
       - name: Get Latest Tag
         id: tag
         shell: bash
@@ -140,6 +141,7 @@ jobs:
           files: |
             dist/Ripen.exe
             dist/RipenInstaller.exe
+            dist/RipenInit.exe
           tag_name: ${{ steps.tag.outputs.tag }}
           fail_on_unmatched_files: false
           append_body: true
