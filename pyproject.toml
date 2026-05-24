@@ -56,8 +56,6 @@ Repository = "https://github.com/ayato-labs/ripen"
 ripen = "ripen.api.server:main"
 ripen-start = "ripen.api.server:main"
 ripen-init = "ripen.cli.init:main"
-ripen-register = "ripen.cli.register:main"
-ripen-unregister = "ripen.cli.unregister:main"
 ripen-admin = "ripen.cli.admin_cli:main"
 ripen-admin-server = "ripen.api.admin_server:main"
 
