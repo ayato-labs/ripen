@@ -2157,7 +2157,7 @@ wheels = [
 
 [[package]]
 name = "ripen"
-version = "1.13.5"
+version = "1.18.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
