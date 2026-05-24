@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v1.18.0 (2026-05-17)
+
+### Chores
+
+- Update project configuration to require Python 3.11 and prune legacy platform dependencies from
+  lockfile
+  ([`c14d8ae`](https://github.com/ayato-labs/ripen/commit/c14d8ae80cfd70d1b674945dc4a81f107f155c82))
+
+### Features
+
+- Implement admin and main MCP server instances with AuthMiddleware and core tooling support
+  ([`38e8e4e`](https://github.com/ayato-labs/ripen/commit/38e8e4e52d173442ac11d315db56f06d4ff63443))
+
+
+## v1.17.0 (2026-05-17)
+
+### Features
+
+- Implement Ripen Hub MCP server with memory management tools and permissive handshake protocol
+  patching
+  ([`06075e3`](https://github.com/ayato-labs/ripen/commit/06075e3d3ac947343cd142637a635c4cd4007461))
+
+
+## v1.16.0 (2026-05-17)
+
+### Features
+
+- Implement high-speed knowledge retrieval salvage pipeline for CLI
+  ([`1d07dce`](https://github.com/ayato-labs/ripen/commit/1d07dce3191412a1c8e0aba54b7bab6b4d365399))
+
+
+## v1.15.0 (2026-05-17)
+
+
 ## v1.14.0 (2026-05-17)
 
 ### Features
