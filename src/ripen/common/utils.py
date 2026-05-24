@@ -387,13 +387,16 @@ def safe_main_executor(main_func):
             return main_func(*args, **kwargs)
         except Exception as e:
             logger.exception("FATAL ERROR: Application crashed.")
-            # Ensure the terminal doesn't close abruptly ONLY if it's a TTY
-            # Background MCP services must exit to avoid deadlocks
-            if sys.stdin.isatty():
+            # Ensure the terminal doesn't close abruptly ONLY if it's a non-CI/non-test environment.
+            # Background MCP services and CI runners must exit to avoid deadlocks/hangs.
+            is_ci = os.environ.get("GITHUB_ACTIONS") == "true"
+            is_test = "PYTEST_CURRENT_TEST" in os.environ
+            
+            if not is_ci and not is_test:
                 logger.critical("!" * 60)
                 logger.critical("  FATAL ERROR OCCURRED")
                 logger.critical(f"  {type(e).__name__}: {e}")
-                logger.critical("  Check logs/error.log for full traceback.")
+                logger.critical("  Check logs/error.jsonl for full traceback.")
                 logger.critical("!" * 60)
                 try:
                     input("\nPress [Enter] to close the terminal...")
