@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.19.0 (2026-05-24)
+
+### Bug Fixes
+
+- Remove unnecessary macOS native test job
+  ([`bf7a858`](https://github.com/ayato-labs/ripen/commit/bf7a8587c9413a198b2f625f1a3ed0f223a97751))
+
+### Features
+
+- Add RipenInit binary release and document setup wizard
+  ([`16f8969`](https://github.com/ayato-labs/ripen/commit/16f896926578d1f549e2c766a645d6fc17a4bad3))
+
+
 ## v1.18.1 (2026-05-24)
 
 ### Bug Fixes
