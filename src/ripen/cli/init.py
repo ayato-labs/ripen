@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,7 @@ def ask_question(question: str, default: Any = None, options: list[str] | None =
     prompt = f"\n\033[1;34m? \033[0m{question}"
     if options:
         prompt += f" ({'/'.join(options)})"
-    if default:
+    if default is not None:
         prompt += f" [\033[1;37m{default}\033[0m]"
     prompt += ": "
 
@@ -48,33 +49,25 @@ def ask_question(question: str, default: Any = None, options: list[str] | None =
             return choice
 
 
-def main():
-    clear_screen()
-    print_banner()
-
-    logger.info("Welcome to Ripen! Let's get your brain infrastructure set up.")
-    logger.info("\n\033[1;33m--- Hub Mode (Setting up a local knowledge server) ---\033[0m")
-    
-    config = {}
-
-    # 1. Base Directory
+def configure_ripen_home(config: dict, existing_config: dict):
+    """Prompts for and resolves the base directory for knowledge storage."""
     default_home = Path.home() / ".ripen"
     ripen_home = ask_question("Where should knowledge be stored?", default=str(default_home))
     config["ripen_home"] = str(Path(ripen_home).absolute())
 
-    # Try to load existing config if it exists to get defaults
     ripen_home_path = Path(config["ripen_home"])
     config_file = ripen_home_path / "config.json"
-    existing_config = {}
     if config_file.exists():
         try:
             with open(config_file, encoding="utf-8") as f:
-                existing_config = json.load(f)
+                existing_config.update(json.load(f))
             logger.info(f"Loaded existing configuration from {config_file}")
         except Exception as e:
             logger.debug(f"Failed to load existing config.json: {e}")
 
-    # 2. LLM Provider
+
+def configure_llm_provider(config: dict, existing_config: dict):
+    """Configures the LLM provider (Gemini / Ollama / None) and its models/keys."""
     logger.info("\n\033[1;33mStep 2: LLM Provider\033[0m (Required for knowledge distillation)")
     default_provider = existing_config.get("llm_provider") or "ollama"
     provider = ask_question(
@@ -122,7 +115,9 @@ def main():
         config["ollama_model"] = ask_question("Ollama Model?", default=default_model)
         logger.info("\n\033[1;33mNote:\033[0m Make sure Ollama is running (`ollama serve`)!")
 
-    # 3. Embedding Configuration
+
+def configure_embeddings(config: dict, existing_config: dict):
+    """Configures the embedding engine (FastEmbed / Gemini) and warns on switching."""
     logger.info("\n\033[1;33mStep 3: Embedding Configuration\033[0m")
     has_api_key = bool(config.get("google_api_key")) or bool(
         os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -135,24 +130,34 @@ def main():
         default_engine = "fastembed"
         
     if not has_api_key:
-        logger.info("Note: Only local embeddings (fastembed) are available since no Google API Key is configured.")
+        logger.info(
+            "Note: Only local embeddings (fastembed) are available "
+            "since no Google API Key is configured."
+        )
         config["embedding_engine"] = "fastembed"
     else:
         engine = ask_question(
-            "Which embedding engine would you like to use? (fastembed is local, gemini is cloud API)",
+            "Which embedding engine would you like to use? "
+            "(fastembed is local, gemini is cloud API)",
             default=default_engine,
             options=engine_options
         )
         config["embedding_engine"] = engine.lower()
         
         # Check if engine has changed from previous setup
-        if existing_config and existing_config.get("embedding_engine") != config["embedding_engine"]:
+        if (
+            existing_config
+            and existing_config.get("embedding_engine")
+            != config["embedding_engine"]
+        ):
             logger.info("\n\033[1;31m⚠️  WARNING: Embedding Engine Change Detected !!!\033[0m")
             logger.info(
-                "Changing the embedding engine requires recalculating (re-indexing) all stored memories."
+                "Changing the embedding engine requires recalculating "
+                "(re-indexing) all stored memories."
             )
             logger.info(
-                "An automatic re-embedding process will run on the next server start to update all dimensions."
+                "An automatic re-embedding process will run on the next "
+                "server start to update all dimensions."
             )
             
         if config["embedding_engine"] == "gemini":
@@ -165,21 +170,48 @@ def main():
             )
             config["google_embedding_model"] = gemini_embed_model
             
-            if existing_config and existing_config.get("google_embedding_model") != config["google_embedding_model"]:
+            if (
+                existing_config
+                and existing_config.get("google_embedding_model")
+                != config["google_embedding_model"]
+            ):
                 logger.info("\n\033[1;31m⚠️  WARNING: Embedding Model Change Detected !!!\033[0m")
                 logger.info(
-                    "Changing the embedding model requires recalculating (re-indexing) all stored memories."
+                    "Changing the embedding model requires recalculating "
+                    "(re-indexing) all stored memories."
                 )
                 logger.info(
-                    "An automatic re-embedding process will run on the next server start to update all dimensions."
+                    "An automatic re-embedding process will run on the next "
+                    "server start to update all dimensions."
                 )
+
+
+def main():
+    clear_screen()
+    print_banner()
+
+    logger.info("Welcome to Ripen! Let's get your brain infrastructure set up.")
+    logger.info("\n\033[1;33m--- Hub Mode (Setting up a local knowledge server) ---\033[0m")
+    
+    config = {}
+    existing_config = {}
+
+    # 1. Base Directory
+    configure_ripen_home(config, existing_config)
+
+    # 2. LLM Provider
+    configure_llm_provider(config, existing_config)
+
+    # 3. Embedding Configuration
+    configure_embeddings(config, existing_config)
 
     # 4. Port & Transport
     config["sse_port"] = existing_config.get("sse_port") or 8377
     config["default_transport"] = existing_config.get("default_transport") or "sse"
 
     # 5. Save Config
-    ripen_home_path.mkdir(parents=True, exist_ok=True)
+    ripen_home_path = Path(config["ripen_home"])
+    config_file = ripen_home_path / "config.json"
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
@@ -190,14 +222,34 @@ def main():
     logger.info("\nTo start your Hub server:")
     logger.info("  \033[1;36mripen\033[0m (or run ripen-hub.exe)")
     
-    logger.info("\nClient Connection URL: \033[1;33mhttp://localhost:8377/mcp\033[0m")
+    def get_local_ip() -> str:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            try:
+                return socket.gethostbyname(socket.gethostname())
+            except Exception:
+                return "127.0.0.1"
+
+    local_ip = get_local_ip()
+    port = config.get("sse_port") or 8377
+    
+    logger.info(f"\nClient Connection URL (Local):  \033[1;33mhttp://localhost:{port}/mcp\033[0m")
+    if local_ip != "127.0.0.1":
+        logger.info(f"Client Connection URL (Remote): \033[1;33mhttp://{local_ip}:{port}/mcp\033[0m")
     
     logger.info("\nTo connect your agents, add this to your client config (e.g., mcp_config.json):")
-    logger.info("""
-    "ripen": {
+    
+    target_ip = local_ip if local_ip != "127.0.0.1" else "localhost"
+    logger.info(f"""
+    "ripen": {{
       "command": "npx",
-      "args": ["-y", "@sammacbeth/mcp-remote", "http://localhost:8377/mcp"]
-    }
+      "args": ["-y", "@sammacbeth/mcp-remote", "http://{target_ip}:{port}/mcp"]
+    }}
     """)
     logger.info("=" * 40)
 

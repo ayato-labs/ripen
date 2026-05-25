@@ -7,7 +7,8 @@ logger = get_logger("migration_v002")
 
 async def migrate(conn: aiosqlite.Connection):
     """
-    Migration v002: Change 'embedding_cache' PRIMARY KEY to composite key (content_hash, model_name).
+    Migration v002: Change 'embedding_cache' PRIMARY KEY to composite key
+    (content_hash, model_name).
     This allows cache entries for multiple models to coexist.
     """
     logger.info("Starting Migration v002...")
@@ -28,22 +29,35 @@ async def migrate(conn: aiosqlite.Connection):
             )
         """)
 
-        # Check if model_name column exists in old table to prevent crash, fallback to default model if missing
+        # Check if model_name column exists in old table to prevent crash,
+        # fallback to default model if missing
         cursor = await conn.execute("PRAGMA table_info(embedding_cache)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "model_name" in columns:
             # Copy data, substituting default fastembed model name if model_name is null
             await conn.execute("""
-                INSERT OR IGNORE INTO embedding_cache_new (content_hash, vector, model_name, created_at)
-                SELECT content_hash, vector, COALESCE(model_name, 'BAAI/bge-small-en-v1.5'), created_at
+                INSERT OR IGNORE INTO embedding_cache_new (
+                    content_hash, vector, model_name, created_at
+                )
+                SELECT
+                    content_hash,
+                    vector,
+                    COALESCE(model_name, 'BAAI/bge-small-en-v1.5'),
+                    created_at
                 FROM embedding_cache
             """)
         else:
             # If for some reason model_name didn't exist in the old table
             await conn.execute("""
-                INSERT OR IGNORE INTO embedding_cache_new (content_hash, vector, model_name, created_at)
-                SELECT content_hash, vector, 'BAAI/bge-small-en-v1.5', created_at
+                INSERT OR IGNORE INTO embedding_cache_new (
+                    content_hash, vector, model_name, created_at
+                )
+                SELECT
+                    content_hash,
+                    vector,
+                    'BAAI/bge-small-en-v1.5',
+                    created_at
                 FROM embedding_cache
             """)
 
