@@ -25,12 +25,21 @@ class ModelManager:
 
     def _get_pool(self, pool_name: str):
         if pool_name not in self._models:
-            from ripen.common.config import GOOGLE_AI_MODELS, GOOGLE_COMPRESSION_MODELS
+            from ripen.common.config import GOOGLE_AI_MODELS, GOOGLE_COMPRESSION_MODELS, settings
 
             if pool_name == "compression":
-                self._models["compression"] = GOOGLE_COMPRESSION_MODELS
+                pref_model = settings.google_compression_model
+                base_pool = GOOGLE_COMPRESSION_MODELS
             else:
-                self._models["generation"] = GOOGLE_AI_MODELS
+                pref_model = settings.google_ai_model
+                base_pool = GOOGLE_AI_MODELS
+
+            # Place preferred model at the head, followed by fallbacks without duplicates
+            pool = [pref_model] if pref_model else []
+            for m in base_pool:
+                if m not in pool:
+                    pool.append(m)
+            self._models[pool_name] = pool
         return self._models[pool_name]
 
     def get_current_model(self, pool_name: str = "generation") -> str:

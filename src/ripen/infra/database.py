@@ -625,6 +625,16 @@ async def init_db(force: bool = False):
         await _run_db_sequence(db_path)
         _DB_INITIALIZED = True
         logger.info("Main database initialization successful.")
+        
+        # --- RUN EMBEDDING MIGRATION ---
+        try:
+            from ripen.infra.uow import SecureWriteContext
+            from ripen.ops.migration_ops import migrate_embeddings_if_needed
+            async with SecureWriteContext() as uow:
+                await migrate_embeddings_if_needed(uow)
+                await uow.commit()
+        except Exception as eme:
+            logger.error(f"Failed to migrate embeddings during startup: {eme}")
     except (aiosqlite.DatabaseError, sqlite3.DatabaseError, DatabaseError) as e:
         logger.warning(f"Database initialization failed: {e}. Recreating...")
         _DB_INITIALIZED = False
