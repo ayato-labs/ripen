@@ -1,10 +1,11 @@
 import json
-import pytest
-from unittest.mock import patch, PropertyMock
+from unittest.mock import PropertyMock, patch
 
-from ripen.common.config import settings, Settings
+import pytest
+
+from ripen.common.config import settings
 from ripen.infra.database import init_db
-from ripen.infra.uow import UnitOfWork, SecureWriteContext
+from ripen.infra.uow import SecureWriteContext, UnitOfWork
 from ripen.ops.migration_ops import migrate_embeddings_if_needed
 
 
@@ -41,7 +42,8 @@ async def test_migrate_embeddings_if_needed_with_mismatch():
     new_model = "new-model-name"
 
     # Setup temporary mock settings so settings.embedding_model returns the new model
-    with patch("ripen.common.config.Settings.embedding_model", new_callable=PropertyMock) as mock_embed_model:
+    patch_target = "ripen.common.config.Settings.embedding_model"
+    with patch(patch_target, new_callable=PropertyMock) as mock_embed_model:
         mock_embed_model.return_value = new_model
         assert settings.embedding_model == new_model
 
@@ -62,7 +64,8 @@ async def test_migrate_embeddings_if_needed_with_mismatch():
                 return [0.9, 0.9, 0.9]
             return [[0.9, 0.9, 0.9]] * len(text_list)
 
-        with patch("ripen.ops.migration_ops.compute_embedding", side_effect=mock_compute_impl) as mock_compute:
+        patch_compute = "ripen.ops.migration_ops.compute_embedding"
+        with patch(patch_compute, side_effect=mock_compute_impl) as mock_compute:
             async with SecureWriteContext() as uow:
                 await migrate_embeddings_if_needed(uow)
                 await uow.commit()
