@@ -37,7 +37,7 @@ def ask_question(question: str, default: Any = None, options: list[str] | None =
 
     while True:
         choice = input(prompt).strip()
-        if not choice and default:
+        if not choice and default is not None:
             return str(default)
         if options and choice.lower() not in [o.lower() for o in options]:
             logger.info(
@@ -62,11 +62,24 @@ def main():
     ripen_home = ask_question("Where should knowledge be stored?", default=str(default_home))
     config["ripen_home"] = str(Path(ripen_home).absolute())
 
+    # Try to load existing config if it exists to get defaults
+    ripen_home_path = Path(config["ripen_home"])
+    config_file = ripen_home_path / "config.json"
+    existing_config = {}
+    if config_file.exists():
+        try:
+            with open(config_file, encoding="utf-8") as f:
+                existing_config = json.load(f)
+            logger.info(f"Loaded existing configuration from {config_file}")
+        except Exception as e:
+            logger.debug(f"Failed to load existing config.json: {e}")
+
     # 2. LLM Provider
     logger.info("\n\033[1;33mStep 2: LLM Provider\033[0m (Required for knowledge distillation)")
+    default_provider = existing_config.get("llm_provider") or "ollama"
     provider = ask_question(
         "Which LLM provider would you like to use?",
-        default="ollama",
+        default=default_provider,
         options=["gemini", "ollama", "none"],
     )
     config["llm_provider"] = provider.lower()
@@ -83,27 +96,90 @@ def main():
         )
         logger.info("environments, we strongly recommend using a local LLM via Ollama instead.")
         
-        api_key = ask_question("Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):")
+        default_api_key = existing_config.get("google_api_key") or ""
+        api_key = ask_question(
+            "Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):",
+            default=default_api_key if default_api_key else None
+        )
         config["google_api_key"] = api_key
         if len(api_key) < 20:
             logger.info("\033[1;31m! Warning: That API key looks a bit short.\033[0m")
 
-    elif provider.lower() == "ollama":
-        config["ollama_base_url"] = ask_question(
-            "Ollama API URL?", default="http://localhost:11434"
+        default_ai_model = existing_config.get("google_ai_model") or "gemma-4-31b-it"
+        gemini_model = ask_question(
+            "Which Gemini/Gemma generative model would you like to use?",
+            default=default_ai_model
         )
-        config["ollama_model"] = ask_question("Ollama Model?", default="gemma4:e2b")
+        config["google_ai_model"] = gemini_model
+        config["google_compression_model"] = gemini_model
+
+    elif provider.lower() == "ollama":
+        default_url = existing_config.get("ollama_base_url") or "http://localhost:11434"
+        config["ollama_base_url"] = ask_question(
+            "Ollama API URL?", default=default_url
+        )
+        default_model = existing_config.get("ollama_model") or "gemma4:e2b"
+        config["ollama_model"] = ask_question("Ollama Model?", default=default_model)
         logger.info("\n\033[1;33mNote:\033[0m Make sure Ollama is running (`ollama serve`)!")
 
-    # 3. Port (Fixed to Streamable HTTP)
-    config["sse_port"] = 8377
-    config["default_transport"] = "sse" # Keep for compatibility in config.py
+    # 3. Embedding Configuration
+    logger.info("\n\033[1;33mStep 3: Embedding Configuration\033[0m")
+    has_api_key = bool(config.get("google_api_key")) or bool(
+        os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    )
+    
+    engine_options = ["fastembed", "gemini"] if has_api_key else ["fastembed"]
+    default_engine = existing_config.get("embedding_engine") or "fastembed"
+    
+    if default_engine == "gemini" and not has_api_key:
+        default_engine = "fastembed"
+        
+    if not has_api_key:
+        logger.info("Note: Only local embeddings (fastembed) are available since no Google API Key is configured.")
+        config["embedding_engine"] = "fastembed"
+    else:
+        engine = ask_question(
+            "Which embedding engine would you like to use? (fastembed is local, gemini is cloud API)",
+            default=default_engine,
+            options=engine_options
+        )
+        config["embedding_engine"] = engine.lower()
+        
+        # Check if engine has changed from previous setup
+        if existing_config and existing_config.get("embedding_engine") != config["embedding_engine"]:
+            logger.info("\n\033[1;31m⚠️  WARNING: Embedding Engine Change Detected !!!\033[0m")
+            logger.info(
+                "Changing the embedding engine requires recalculating (re-indexing) all stored memories."
+            )
+            logger.info(
+                "An automatic re-embedding process will run on the next server start to update all dimensions."
+            )
+            
+        if config["embedding_engine"] == "gemini":
+            default_embed_model = (
+                existing_config.get("google_embedding_model") or "models/gemini-embedding-2"
+            )
+            gemini_embed_model = ask_question(
+                "Which Gemini embedding model would you like to use?",
+                default=default_embed_model
+            )
+            config["google_embedding_model"] = gemini_embed_model
+            
+            if existing_config and existing_config.get("google_embedding_model") != config["google_embedding_model"]:
+                logger.info("\n\033[1;31m⚠️  WARNING: Embedding Model Change Detected !!!\033[0m")
+                logger.info(
+                    "Changing the embedding model requires recalculating (re-indexing) all stored memories."
+                )
+                logger.info(
+                    "An automatic re-embedding process will run on the next server start to update all dimensions."
+                )
 
-    # 4. Save Config
-    ripen_home_path = Path(config["ripen_home"])
+    # 4. Port & Transport
+    config["sse_port"] = existing_config.get("sse_port") or 8377
+    config["default_transport"] = existing_config.get("default_transport") or "sse"
+
+    # 5. Save Config
     ripen_home_path.mkdir(parents=True, exist_ok=True)
-
-    config_file = ripen_home_path / "config.json"
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
