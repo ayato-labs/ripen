@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -190,14 +191,34 @@ def main():
     logger.info("\nTo start your Hub server:")
     logger.info("  \033[1;36mripen\033[0m (or run ripen-hub.exe)")
     
-    logger.info("\nClient Connection URL: \033[1;33mhttp://localhost:8377/mcp\033[0m")
+    def get_local_ip() -> str:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            try:
+                return socket.gethostbyname(socket.gethostname())
+            except Exception:
+                return "127.0.0.1"
+
+    local_ip = get_local_ip()
+    port = config.get("sse_port") or 8377
+    
+    logger.info(f"\nClient Connection URL (Local):  \033[1;33mhttp://localhost:{port}/mcp\033[0m")
+    if local_ip != "127.0.0.1":
+        logger.info(f"Client Connection URL (Remote): \033[1;33mhttp://{local_ip}:{port}/mcp\033[0m")
     
     logger.info("\nTo connect your agents, add this to your client config (e.g., mcp_config.json):")
-    logger.info("""
-    "ripen": {
+    
+    target_ip = local_ip if local_ip != "127.0.0.1" else "localhost"
+    logger.info(f"""
+    "ripen": {{
       "command": "npx",
-      "args": ["-y", "@sammacbeth/mcp-remote", "http://localhost:8377/mcp"]
-    }
+      "args": ["-y", "@sammacbeth/mcp-remote", "http://{target_ip}:{port}/mcp"]
+    }}
     """)
     logger.info("=" * 40)
 
