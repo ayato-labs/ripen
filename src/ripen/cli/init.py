@@ -49,6 +49,20 @@ def ask_question(question: str, default: Any = None, options: list[str] | None =
             return choice
 
 
+def validate_gemini_api_key(api_key: str) -> bool:
+    if not api_key:
+        return False
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        # Verify API key by listing models
+        next(iter(client.models.list(page_size=1)), None)
+        return True
+    except Exception as e:
+        logger.info(f"\033[1;31m❌ API key validation failed: {e}\033[0m")
+        return False
+
+
 def configure_ripen_home(config: dict, existing_config: dict):
     """Prompts for and resolves the base directory for knowledge storage."""
     default_home = Path.home() / ".ripen"
@@ -89,24 +103,32 @@ def configure_llm_provider(config: dict, existing_config: dict):
         )
         logger.info("environments, we strongly recommend using a local LLM via Ollama instead.")
         
-        default_api_key = existing_config.get("google_api_key") or ""
-        masked_default = None
-        if default_api_key:
-            if len(default_api_key) > 12:
-                masked_default = f"{default_api_key[:6]}...{default_api_key[-4:]}"
-            else:
-                masked_default = "********"
+        while True:
+            default_api_key = existing_config.get("google_api_key") or ""
+            masked_default = None
+            if default_api_key:
+                if len(default_api_key) > 12:
+                    masked_default = f"{default_api_key[:6]}...{default_api_key[-4:]}"
+                else:
+                    masked_default = "********"
 
-        api_key = ask_question(
-            "Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):",
-            default=masked_default
-        )
-        if masked_default and api_key == masked_default:
-            config["google_api_key"] = default_api_key
-        else:
-            config["google_api_key"] = api_key
-        if len(api_key) < 20:
-            logger.info("\033[1;31m! Warning: That API key looks a bit short.\033[0m")
+            api_key = ask_question(
+                "Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):",
+                default=masked_default
+            )
+            if masked_default and api_key == masked_default:
+                resolved_key = default_api_key
+            else:
+                resolved_key = api_key
+
+            logger.info("Validating Google API Key...")
+            if validate_gemini_api_key(resolved_key):
+                config["google_api_key"] = resolved_key
+                break
+            else:
+                logger.info("\033[1;31mPlease enter a valid, active API key or check your network connection.\033[0m")
+                if "google_api_key" in existing_config:
+                    del existing_config["google_api_key"]
 
         default_ai_model = existing_config.get("google_ai_model") or "gemma-4-31b-it"
         gemini_model = ask_question(
@@ -123,26 +145,42 @@ def configure_llm_provider(config: dict, existing_config: dict):
         )
         default_model = existing_config.get("ollama_model") or "gemma4:e2b"
         config["ollama_model"] = ask_question("Ollama Model?", default=default_model)
-        logger.info("\n\033[1;33mNote:\033[0m Make sure Ollama is running (`ollama serve`)!")
+        
+        # Verify Ollama is reachable
+        import urllib.request
+        try:
+            logger.info("Checking Ollama status...")
+            req = urllib.request.Request(f"{config['ollama_base_url']}/api/tags")
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    logger.info("\033[1;32m✅ Ollama connection verified.\033[0m")
+        except Exception:
+            logger.info(
+                "\n\033[1;33m⚠️  Warning: Could not connect to Ollama at the specified URL.\033[0m\n"
+                "Please make sure Ollama is running (`ollama serve`) when starting the server."
+            )
 
 
 def configure_embeddings(config: dict, existing_config: dict):
     """Configures the embedding engine (FastEmbed / Gemini) and warns on switching."""
     logger.info("\n\033[1;33mStep 3: Embedding Configuration\033[0m")
-    has_api_key = bool(config.get("google_api_key")) or bool(
-        os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    )
     
-    engine_options = ["fastembed", "gemini"] if has_api_key else ["fastembed"]
+    api_key_to_use = config.get("google_api_key") or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    has_valid_key = False
+    if api_key_to_use:
+        logger.info("Verifying Google API Key for Embeddings...")
+        has_valid_key = validate_gemini_api_key(api_key_to_use)
+    
+    engine_options = ["fastembed", "gemini"] if has_valid_key else ["fastembed"]
     default_engine = existing_config.get("embedding_engine") or "fastembed"
     
-    if default_engine == "gemini" and not has_api_key:
+    if default_engine == "gemini" and not has_valid_key:
         default_engine = "fastembed"
         
-    if not has_api_key:
+    if not has_valid_key:
         logger.info(
             "Note: Only local embeddings (fastembed) are available "
-            "since no Google API Key is configured."
+            "since no valid Google API Key is configured."
         )
         config["embedding_engine"] = "fastembed"
     else:
