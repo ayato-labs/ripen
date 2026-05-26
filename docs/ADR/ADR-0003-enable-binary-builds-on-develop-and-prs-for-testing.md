@@ -1,7 +1,7 @@
 # ADR-0003: develop ブランチおよびプルリクエストにおけるリリース前バイナリビルドの有効化
 
 - **Date**: 2026-05-24
-- **Status**: Proposed
+- **Status**: Accepted
 - **Deciders**: ayato-labs (Human), Antigravity (Agent)
 
 ## Context

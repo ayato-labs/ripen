@@ -1,7 +1,7 @@
 # ADR-0004: 開発版バイナリの開発版プレリリース（dev-latest）としての自動配信
 
 - **Date**: 2026-05-24
-- **Status**: Proposed
+- **Status**: Accepted
 - **Deciders**: ayato-labs (Human), Antigravity (Agent)
 
 ## Context
