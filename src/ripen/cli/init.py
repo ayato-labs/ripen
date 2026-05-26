@@ -90,11 +90,21 @@ def configure_llm_provider(config: dict, existing_config: dict):
         logger.info("environments, we strongly recommend using a local LLM via Ollama instead.")
         
         default_api_key = existing_config.get("google_api_key") or ""
+        masked_default = None
+        if default_api_key:
+            if len(default_api_key) > 12:
+                masked_default = f"{default_api_key[:6]}...{default_api_key[-4:]}"
+            else:
+                masked_default = "********"
+
         api_key = ask_question(
             "Enter your GOOGLE_API_KEY (from https://aistudio.google.com/):",
-            default=default_api_key if default_api_key else None
+            default=masked_default
         )
-        config["google_api_key"] = api_key
+        if masked_default and api_key == masked_default:
+            config["google_api_key"] = default_api_key
+        else:
+            config["google_api_key"] = api_key
         if len(api_key) < 20:
             logger.info("\033[1;31m! Warning: That API key looks a bit short.\033[0m")
 
