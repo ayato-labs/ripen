@@ -104,7 +104,26 @@ def configure_llm_provider(config: dict, existing_config: dict):
         logger.info("environments, we strongly recommend using a local LLM via Ollama instead.")
         
         while True:
-            default_api_key = existing_config.get("google_api_key") or ""
+            default_api_key = (
+                existing_config.get("google_api_key")
+                or os.environ.get("GEMINI_API_KEY")
+                or os.environ.get("GOOGLE_API_KEY")
+                or ""
+            )
+            if default_api_key:
+                logger.info("Verifying default API key...")
+                if not validate_gemini_api_key(default_api_key):
+                    logger.info(
+                        "\033[1;33m⚠️  Default API key is invalid or inactive. Clearing default suggestion.\033[0m"
+                    )
+                    default_api_key = ""
+                    if "GEMINI_API_KEY" in os.environ:
+                        del os.environ["GEMINI_API_KEY"]
+                    if "GOOGLE_API_KEY" in os.environ:
+                        del os.environ["GOOGLE_API_KEY"]
+                    if "google_api_key" in existing_config:
+                        del existing_config["google_api_key"]
+
             masked_default = None
             if default_api_key:
                 if len(default_api_key) > 12:
