@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import signal
+import socket
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -318,10 +319,42 @@ except Exception as e:
 # --- ENTRY POINT ---
 
 
+def get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+
+
+def get_local_hostname() -> str:
+    try:
+        return socket.gethostname()
+    except Exception:
+        return ""
+
+
 def print_banner(mode: str, port: int, version: str):
     lm = LicenseManager()
     lm.validate_locally()
     license_text = lm.get_status_summary()
+
+    local_ip = get_local_ip()
+    hostname = get_local_hostname()
+    dashboard_url = f"http://localhost:{port}/dashboard"
+    endpoint_url = f"http://localhost:{port}/mcp"
+    if local_ip != "127.0.0.1":
+        dashboard_url += f" (or http://{local_ip}:{port}/dashboard)"
+        endpoint_url += f" (or http://{local_ip}:{port}/mcp)"
+    if hostname:
+        dashboard_url += f" (or http://{hostname}.local:{port}/dashboard)"
+        endpoint_url += f" (or http://{hostname}.local:{port}/mcp)"
 
     lines = [
         "\033[1;32m" + "=" * 60 + "\033[0m",
@@ -332,7 +365,8 @@ def print_banner(mode: str, port: int, version: str):
         f"  \033[1;33m[LLM]\033[0m       {settings.llm_provider} ({settings.generative_model})",
         f"  \033[1;33m[Embed]\033[0m     {settings.embedding_engine} ({settings.embedding_model})",
         f"  \033[1;36m[Data]\033[0m      {settings.base_dir}",
-        f"  \033[1;35m[Dashboard]\033[0m http://localhost:{port}/dashboard",
+        f"  \033[1;35m[Endpoint]\033[0m  {endpoint_url}",
+        f"  \033[1;35m[Dashboard]\033[0m {dashboard_url}",
         f"  \033[1;37m[License]\033[0m   {license_text}",
         "\033[1;32m" + "=" * 60 + "\033[0m",
         ""
@@ -404,6 +438,19 @@ def main():
     logger.info("Plugins loaded. Printing banner...")
     print_banner("Streamable HTTP", port, version)
     logger.info("Banner printed. Running FastMCP server...")
+
+    local_ip = get_local_ip()
+    hostname = get_local_hostname()
+    logger.info(f"Ripen Server starting on host: {args.host}, port: {port}")
+    logger.info(f"API Endpoint (local): http://localhost:{port}/mcp")
+    if args.host == "0.0.0.0":
+        if local_ip != "127.0.0.1":
+            logger.info(f"API Endpoint (network IP): http://{local_ip}:{port}/mcp")
+            logger.info(f"Dashboard (network IP): http://{local_ip}:{port}/dashboard")
+        if hostname:
+            logger.info(f"API Endpoint (mDNS hostname): http://{hostname}.local:{port}/mcp")
+            logger.info(f"Dashboard (mDNS hostname): http://{hostname}.local:{port}/dashboard")
+
     mcp.run(transport="streamable-http", host=args.host, port=port, show_banner=False)
 
 

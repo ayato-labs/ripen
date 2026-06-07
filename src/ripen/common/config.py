@@ -18,7 +18,7 @@ DEFAULT_LLM_PROVIDER = "ollama"
 # Gemini Settings (Optional)
 GOOGLE_AI_MODELS = ["gemma-4-31b-it", "gemma-4-26b-a4b-it"]
 GOOGLE_COMPRESSION_MODELS = ["gemma-4-31b-it", "gemma-4-26b-a4b-it"]
-GOOGLE_EMBEDDING_MODEL = "models/gemini-embedding-001"
+GOOGLE_EMBEDDING_MODEL = "models/gemini-embedding-2"
 
 # Ollama Settings (Local host)
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -147,17 +147,17 @@ class Settings:
     @property
     def google_ai_model(self) -> str:
         """Google AIで使用するモデルを返す。"""
-        return GOOGLE_AI_MODELS[0]
+        return self.get("GOOGLE_AI_MODEL", GOOGLE_AI_MODELS[0])
 
     @property
     def google_compression_model(self) -> str:
         """Google AIで使用する圧縮用モデルを返す。"""
-        return GOOGLE_COMPRESSION_MODELS[0]
+        return self.get("GOOGLE_COMPRESSION_MODEL", GOOGLE_COMPRESSION_MODELS[0])
 
     @property
     def google_embedding_model(self) -> str:
         """Google AIで使用するEmbeddingモデルを返す。"""
-        return GOOGLE_EMBEDDING_MODEL
+        return self.get("GOOGLE_EMBEDDING_MODEL", GOOGLE_EMBEDDING_MODEL)
 
     @property
     def embedding_model(self) -> str:
