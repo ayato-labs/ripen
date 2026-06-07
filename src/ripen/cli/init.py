@@ -56,7 +56,7 @@ def validate_gemini_api_key(api_key: str) -> bool:
         from google import genai
         client = genai.Client(api_key=api_key)
         # Verify API key by listing models
-        next(iter(client.models.list(page_size=1)), None)
+        next(iter(client.models.list(config={"page_size": 1})), None)
         return True
     except Exception as e:
         logger.info(f"\033[1;31m❌ API key validation failed: {e}\033[0m")
