@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.21.0 (2026-06-07)
+
+### Features
+
+- Implement interactive CLI initialization for Ripen configuration
+  ([`988d839`](https://github.com/ayato-labs/ripen/commit/988d8391d0f552f209c165af6d576da643be5b80))
+
+
 ## v1.20.0 (2026-06-07)
 
 ### Bug Fixes
