@@ -9,6 +9,8 @@ logger = get_logger("auth")
 
 # Context variable to hold the authenticated account name for the current request/task
 current_user: ContextVar[str | None] = ContextVar("current_user", default=None)
+in_http_request: ContextVar[bool] = ContextVar("in_http_request", default=False)
+
 
 
 class IAuthProvider(ABC):
@@ -93,19 +95,45 @@ class AuthMiddleware:
                 if account_name:
                     break
 
+        # Fallback if authentication is not configured at all
+        if not account_name:
+            env_key = os.environ.get("RIPEN_API_KEY") or os.environ.get("SHARED_MEMORY_API_KEY")
+            has_file_keys = False
+            for provider in self.providers:
+                if isinstance(provider, LocalFileAuthProvider):
+                    if provider.auth_data:
+                        has_file_keys = True
+            if not (env_key or has_file_keys):
+                account_name = os.environ.get("RIPEN_ACCOUNT") or os.environ.get(
+                    "SHARED_MEMORY_ACCOUNT", "default_env_user"
+                )
+
         if account_name:
             logger.debug(f"Authenticated request from: {account_name}")
         else:
             logger.debug(f"Unauthenticated request to {scope.get('path', '')}")
 
         # 3. Set context and continue
+        token_http = in_http_request.set(True)
         token = current_user.set(account_name)
         try:
             return await self.app(scope, receive, send)
         finally:
             current_user.reset(token)
+            in_http_request.reset(token_http)
 
 
 def get_current_user() -> str | None:
     """Returns the authenticated account name for the current context."""
-    return current_user.get()
+    user = current_user.get()
+    if user is not None:
+        return user
+
+    # If we are NOT in an HTTP request (e.g., stdio transport, direct CLI tool calls, or tests),
+    # return the default/configured local user.
+    if not in_http_request.get():
+        return os.environ.get("RIPEN_ACCOUNT") or os.environ.get(
+            "SHARED_MEMORY_ACCOUNT", "default_env_user"
+        )
+
+    return None

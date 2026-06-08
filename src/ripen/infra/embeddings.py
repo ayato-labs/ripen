@@ -119,13 +119,19 @@ async def _run_engine_computation(to_compute: list[str], model_name: str) -> lis
     if not client:
         raise ValueError("Gemini engine selected but API key is missing.")
 
-    await AIRateLimiter.throttle(task_type="embedding")
-    response = await client.aio.models.embed_content(
-        model=model_name,
-        contents=to_compute,
-        config={"task_type": "RETRIEVAL_DOCUMENT"},
-    )
-    return [emb.values for emb in response.embeddings]
+    import asyncio
+
+    async def _embed_single(text: str) -> list[float]:
+        await AIRateLimiter.throttle(task_type="embedding")
+        response = await client.aio.models.embed_content(
+            model=model_name,
+            contents=text,
+            config={"task_type": "RETRIEVAL_DOCUMENT"},
+        )
+        return response.embeddings[0].values
+
+    tasks = [_embed_single(text) for text in to_compute]
+    return await asyncio.gather(*tasks)
 
 
 def _get_text_hash(text: str) -> str:

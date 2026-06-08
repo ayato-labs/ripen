@@ -107,8 +107,16 @@ class Settings:
         # 1. Environment variables or config.json
         api_key = self.get("GOOGLE_API_KEY") or self.get("GEMINI_API_KEY")
         if api_key:
-            self._api_key = api_key.strip()
-            return self._api_key
+            stripped = api_key.strip()
+            # Ignore placeholder values commonly found in .env.example or template .env files
+            if stripped not in (
+                "your_gemini_api_key_here",
+                "YOUR_GOOGLE_API_KEY_HERE",
+                "YOUR_GEMINI_API_KEY_HERE",
+                "",
+            ):
+                self._api_key = stripped
+                return self._api_key
 
         return None
 

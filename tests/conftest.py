@@ -25,6 +25,23 @@ async def setup_teardown_db(request):
     os.environ["THOUGHTS_DB_PATH"] = os.path.join(home_dir, "thoughts.db")
     os.environ["MEMORY_BANK_DIR"] = os.path.join(home_dir, "bank")
 
+    # Load global config.json api key if GEMINI_API_KEY is not set or is a placeholder
+    curr_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not curr_key or "your_gemini_api_key_here" in curr_key:
+        global_home = os.path.expanduser("~/.ripen")
+        global_config_path = os.path.join(global_home, "config.json")
+        if os.path.exists(global_config_path):
+            try:
+                import json
+                with open(global_config_path, encoding="utf-8") as f:
+                    config_data = json.load(f)
+                    api_key = config_data.get("google_api_key") or config_data.get("gemini_api_key")
+                    if api_key and "your_gemini_api_key_here" not in api_key:
+                        os.environ["GEMINI_API_KEY"] = api_key
+            except Exception:
+                pass
+
+
     # Initialize databases for each test (Skip for system tests to avoid locking)
     if "system" not in str(request.node.fspath):
         await init_db(force=True)
