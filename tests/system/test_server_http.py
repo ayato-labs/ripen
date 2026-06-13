@@ -46,13 +46,15 @@ def server_process():
     test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "test_db"))
     env = _prepare_test_env(test_dir)
 
+    # Add environment variable to keep the server running and ensure output is visible
+    env["PYTHONUNBUFFERED"] = "1"
     log_file_path = os.path.join(test_dir, "server.log")
-    log_file = open(log_file_path, "w", encoding="utf-8")
+    log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)
 
     process = subprocess.Popen(
-        [sys.executable, "-m", "ripen.api.server", "--port", "8377"],
+        [sys.executable, "-u", "-m", "ripen.api.server", "--port", "8377"],
         stdout=log_file,
-        stderr=log_file,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout
         stdin=subprocess.DEVNULL,
         text=True,
         env=env
