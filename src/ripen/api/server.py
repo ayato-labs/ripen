@@ -49,15 +49,7 @@ mcp = FastMCP(
     version="3.2.4",
 )
 
-from ripen.api.auth import AuthMiddleware, get_current_user
-
-if hasattr(mcp, "app"):
-    logger.info("Applying AuthMiddleware to mcp.app")
-    mcp.app.add_middleware(AuthMiddleware)
-else:
-    logger.warning("mcp instance does not have 'app' attribute. Could not apply AuthMiddleware.")
-
-
+from ripen.api.auth import get_current_user
 
 
 def handle_exception(_loop, context):
@@ -151,8 +143,6 @@ async def save_memory(
         f"Tool called: save_memory (Entities: {len(entities)}, Relations: {len(relations)})"
     )
     user = agent_id or get_current_user()
-    if not user:
-        raise Exception("Authentication required. Please provide a valid API key.")
     try:
         await logic_module.save_memory_core(
             entities=entities,
@@ -196,8 +186,6 @@ async def sequential_thinking(
     """
     logger.info(f"Tool called: sequential_thinking (Thought {thought_number}/{total_thoughts})")
     user = get_current_user()
-    if not user:
-        raise Exception("Authentication required. Please provide a valid API key.")
     try:
         result = await thought_module.process_thought_core(
             thought=thought,
@@ -394,6 +382,9 @@ def main():
     parser = argparse.ArgumentParser(description="Ripen Hub Server")
     parser.add_argument("--port", type=int, help="Port for the server")
     parser.add_argument("--host", default="0.0.0.0", help="Host for the server")
+    parser.add_argument("--http", action="store_true", help="Start in Streamable HTTP mode")
+    parser.add_argument("--sse", action="store_true", help="Alias for --http (Deprecated)")
+    parser.add_argument("--stdio", action="store_true", help="Start in Standard I/O mode")
     parser.add_argument("--dev", action="store_true", help="Start in development mode")
 
 
@@ -402,6 +393,19 @@ def main():
 
     if args.dev:
         os.environ["LOG_LEVEL"] = "DEBUG"
+    
+    # Mode Detection
+    use_http = args.http or args.sse
+    use_stdio = args.stdio
+    
+    if not use_http and not use_stdio:
+        # Default to config
+        use_http = settings.default_transport == "streamable-http"
+        use_stdio = settings.default_transport == "stdio"
+    
+    # If still neither, default to HTTP for Hub
+    if not use_http and not use_stdio:
+        use_http = True
 
     # Handle termination signals
     def handle_signal(sig, _frame):
@@ -411,47 +415,55 @@ def main():
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
-    port = args.port or settings.sse_port or 8377
-    logger.info(f"Port check: port={port}")
+    if use_http:
+        # Use http_port from settings as default
+        port = args.port or settings.http_port or 8377
+        logger.info(f"Port check: port={port}")
 
-    logger.info("Starting cleanup and port check...")
-    _kill_port_process(port)
-    logger.info("Cleanup completed. Checking port availability...")
+        logger.info("Starting cleanup and port check...")
+        _kill_port_process(port)
+        logger.info("Cleanup completed. Checking port availability...")
 
-    # Double check port availability
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    result = sock.connect_ex(("127.0.0.1", port))
-    if result == 0:
-        logger.error(
-            f"PORT CONFLICT: Port {port} is already in use by another process. "
-            f"Please stop all other Ripen Hub instances."
-        )
+        # Double check port availability
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(("127.0.0.1", port))
+        if result == 0:
+            logger.error(
+                f"PORT CONFLICT: Port {port} is already in use by another process. "
+                f"Please stop all other Ripen Hub instances."
+            )
+            sock.close()
+            sys.exit(1)
         sock.close()
-        sys.exit(1)
-    sock.close()
-    logger.info("Port is available.")
+        logger.info("Port is available.")
 
-    # Load plugins before starting
-    logger.info("Loading plugins...")
-    PluginLoader.load_all(context={"settings": settings})
-    logger.info("Plugins loaded. Printing banner...")
-    print_banner("Streamable HTTP", port, version)
-    logger.info("Banner printed. Running FastMCP server...")
+        # Load plugins before starting
+        logger.info("Loading plugins...")
+        PluginLoader.load_all(context={"settings": settings})
+        logger.info("Plugins loaded. Printing banner...")
+        print_banner("Streamable HTTP", port, version)
+        logger.info("Banner printed. Running FastMCP server...")
 
-    local_ip = get_local_ip()
-    hostname = get_local_hostname()
-    logger.info(f"Ripen Server starting on host: {args.host}, port: {port}")
-    logger.info(f"API Endpoint (local): http://localhost:{port}/mcp")
-    if args.host == "0.0.0.0":
-        if local_ip != "127.0.0.1":
-            logger.info(f"API Endpoint (network IP): http://{local_ip}:{port}/mcp")
-            logger.info(f"Dashboard (network IP): http://{local_ip}:{port}/dashboard")
-        if hostname:
-            logger.info(f"API Endpoint (mDNS hostname): http://{hostname}.local:{port}/mcp")
-            logger.info(f"Dashboard (mDNS hostname): http://{hostname}.local:{port}/dashboard")
+        local_ip = get_local_ip()
+        hostname = get_local_hostname()
+        logger.info(f"Ripen Server starting on host: {args.host}, port: {port}")
+        logger.info(f"API Endpoint (local): http://localhost:{port}/mcp")
+        if args.host == "0.0.0.0":
+            if local_ip != "127.0.0.1":
+                logger.info(f"API Endpoint (network IP): http://{local_ip}:{port}/mcp")
+                logger.info(f"Dashboard (network IP): http://{local_ip}:{port}/dashboard")
+            if hostname:
+                logger.info(f"API Endpoint (mDNS hostname): http://{hostname}.local:{port}/mcp")
+                logger.info(f"Dashboard (mDNS hostname): http://{hostname}.local:{port}/dashboard")
 
-    mcp.run(transport="streamable-http", host=args.host, port=port, show_banner=False)
+        mcp.run(transport="streamable-http", host=args.host, port=port, show_banner=False)
+    else:
+        # Stdio mode
+        logger.info("Starting Ripen Hub in Standard I/O mode...")
+        # Load plugins
+        PluginLoader.load_all(context={"settings": settings})
+        mcp.run(transport="stdio")
 
 
 def _kill_port_process(port: int):

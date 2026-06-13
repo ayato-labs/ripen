@@ -28,8 +28,6 @@ OLLAMA_DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:e2b")
 FASTEMBED_DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 
-
-
 class Settings:
     """Ripenの設定を管理するクラス。"""
 
@@ -136,7 +134,6 @@ class Settings:
             return provider.lower()
         return DEFAULT_LLM_PROVIDER
 
-
     @property
     def ollama_base_url(self) -> str:
         """OllamaのベースURLを返す。"""
@@ -179,10 +176,11 @@ class Settings:
         """現在選択されているプロバイダーに応じた生成モデル名を返す。"""
         if self.llm_provider == "ollama":
             return self.ollama_model
-        
+
         # Avoid circular import by importing inside the property
         try:
             from ripen.core.ai_control import model_manager
+
             return model_manager.get_current_model("generation")
         except (ImportError, Exception):
             # Fallback to default if model_manager is not available
@@ -205,13 +203,26 @@ class Settings:
 
     @property
     def default_transport(self) -> str:
-        """デフォルトの通信方式 (stdio or sse) を返す。"""
-        return self.get("DEFAULT_TRANSPORT", "stdio").lower()
+        """デフォルトの通信方式 (stdio or streamable-http) を返す。"""
+        transport = self.get("DEFAULT_TRANSPORT", "stdio").lower()
+        if transport == "sse":
+            return "streamable-http"
+        return transport
+
+    @property
+    def http_port(self) -> int:
+        """HTTPモードで使用するポート番号を返す。"""
+        # Support both HTTP_PORT and SSE_PORT for backward compatibility
+        port = self.get("HTTP_PORT") or self.get("SSE_PORT")
+        if port:
+            return int(port)
+        return 8377
 
     @property
     def sse_port(self) -> int:
-        """SSEモードで使用するポート番号を返す。"""
-        return int(self.get("SSE_PORT", "8377"))
+        """SSEモードで使用するポート番号を返す (DEPRECATED)。"""
+        logger.warning("sse_port is deprecated. Use http_port instead.")
+        return self.http_port
 
     @property
     def db_path(self) -> Path:
