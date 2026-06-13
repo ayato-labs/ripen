@@ -5,25 +5,18 @@ from ripen.infra.database import init_db
 from ripen.infra.uow import SecureWriteContext, UnitOfWork
 
 # Create MCP server instance (Control Plane / Admin)
-mcp = FastMCP("SharedMemoryAdminServer")
+mcp = FastMCP("RipenAdminServer")
 
-from ripen.api.auth import AuthMiddleware, get_current_user
+from ripen.api.auth import get_current_user
 from ripen.common.utils import get_logger
 
 logger = get_logger("admin_server")
 
-if hasattr(mcp, "app"):
-    logger.info("Applying AuthMiddleware to mcp.app")
-    mcp.app.add_middleware(AuthMiddleware)
-else:
-    logger.warning("mcp instance does not have 'app' attribute. Could not apply AuthMiddleware.")
-
 def enforce_auth():
-    user = get_current_user()
-    if not user:
-        raise Exception("Authentication required. Please provide a valid API key.")
-    return user
-
+    """
+    Legacy helper. In MVP, authentication is handled by a default user.
+    """
+    return get_current_user()
 
 
 # ==========================================
@@ -40,7 +33,12 @@ async def lifespan(_mcp_instance: FastMCP):
     await init_db()
     await thought_logic.init_thoughts_db()
 
-    yield
+    try:
+        yield
+    finally:
+        logger.info("Admin Server: Closing database connections...")
+        from ripen.infra.database import close_all_connections
+        await close_all_connections()
 
 
 # ==========================================

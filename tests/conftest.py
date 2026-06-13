@@ -19,14 +19,39 @@ async def setup_teardown_db(request):
     logger.remove()
 
     # Standard path resolution for testing - Use a more specific prefix
-    home_dir = tempfile.mkdtemp(prefix="sm_test_")
-    os.environ["SHARED_MEMORY_HOME"] = home_dir
+    home_dir = tempfile.mkdtemp(prefix="ripen_test_")
+    os.environ["RIPEN_HOME"] = home_dir
     os.environ["MEMORY_DB_PATH"] = os.path.join(home_dir, "knowledge.db")
     os.environ["THOUGHTS_DB_PATH"] = os.path.join(home_dir, "thoughts.db")
     os.environ["MEMORY_BANK_DIR"] = os.path.join(home_dir, "bank")
 
+    # Force reset settings cache to pick up new environment variables
+    from ripen.common.config import settings
+    settings._base_dir = None
+    settings._api_key = None
+    settings._config_data = {}
+
+    # Load global config.json api key if GEMINI_API_KEY is not set or is a placeholder
+    curr_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not curr_key or "your_gemini_api_key_here" in curr_key:
+        global_home = os.path.expanduser("~/.ripen")
+        global_config_path = os.path.join(global_home, "config.json")
+        if os.path.exists(global_config_path):
+            try:
+                import json
+                with open(global_config_path, encoding="utf-8") as f:
+                    config_data = json.load(f)
+                    api_key = config_data.get("google_api_key") or config_data.get("gemini_api_key")
+                    if api_key and "your_gemini_api_key_here" not in api_key:
+                        os.environ["GEMINI_API_KEY"] = api_key
+            except Exception:
+                pass
+
+
     # Initialize databases for each test (Skip for system tests to avoid locking)
     if "system" not in str(request.node.fspath):
+        from ripen.infra.database import close_all_connections, init_db
+        await close_all_connections()
         await init_db(force=True)
         await init_thoughts_db(force=True)
 
@@ -41,26 +66,12 @@ async def setup_teardown_db(request):
         # Still need to create the directory so env vars point to a valid place
         os.makedirs(os.environ["MEMORY_BANK_DIR"], exist_ok=True)
 
-    # Reset database singletons and locks
-    from ripen.infra import database
-
-    database._MAIN_CONNECTION = None
-    database._THOUGHTS_CONNECTION = None
-    database._INIT_LOCK = None
-    database._DB_INITIALIZED = False
-    database._WRITE_SEMAPHORES = {}
-
-    # Reset AI control locks
-    from ripen.core import ai_control
-
-    ai_control.model_manager._lock = None
-    ai_control.AIRateLimiter._locks = {}
-
     yield
 
     # Teardown: Close singleton connections before rmtree (Windows requirement)
     try:
         from ripen.api.server import wait_for_background_tasks
+        from ripen.infra.database import close_all_connections
 
         await wait_for_background_tasks(timeout=2.0)
         await close_all_connections()

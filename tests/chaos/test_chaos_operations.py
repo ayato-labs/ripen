@@ -87,9 +87,8 @@ async def test_concurrent_saves():
         assert "Saved" in res or "success" in res.lower()
 
 
-@pytest.fixture(scope="module")
-def server_process():
-    """Starts the Ripen Hub server in a background process for load testing."""
+def _prepare_chaos_env(test_dir: str) -> dict:
+    """Sets up the environment variables and directories for the chaos test server."""
     env = os.environ.copy()
     src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
     if "PYTHONPATH" in env:
@@ -97,29 +96,18 @@ def server_process():
     else:
         env["PYTHONPATH"] = src_path
 
-    test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "test_db_chaos"))
     os.makedirs(test_dir, exist_ok=True)
     os.makedirs(os.path.join(test_dir, "bank"), exist_ok=True)
     
     env["MEMORY_DB_PATH"] = os.path.join(test_dir, "knowledge.db")
     env["THOUGHTS_DB_PATH"] = os.path.join(test_dir, "thoughts.db")
     env["MEMORY_BANK_DIR"] = os.path.join(test_dir, "bank")
+    env["PYTHONUNBUFFERED"] = "1"
+    return env
 
-    log_file_path = os.path.join(test_dir, "server.log")
-    log_file = open(log_file_path, "w", encoding="utf-8")
 
-    # Start the server on a different port to avoid conflict
-    process = subprocess.Popen(
-        [sys.executable, "-m", "ripen.api.server", "--port", "8378"],
-        stdout=log_file,
-        stderr=log_file,
-        text=True,
-        env=env
-    )
-    
-    time.sleep(10)
-    yield process
-    
+def _stop_chaos_server(process: subprocess.Popen):
+    """Gracefully stops the chaos server process."""
     if process.poll() is None:
         if sys.platform == "win32":
             process.terminate()
@@ -130,14 +118,53 @@ def server_process():
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-            
+
+
+def _wait_for_chaos_server(process: subprocess.Popen, port: int, max_retries: int = 30) -> bool:
+    """Waits for the chaos server to be ready."""
+    for _ in range(max_retries):
+        if process.poll() is not None:
+            return False
+        try:
+            response = httpx.get(f"http://localhost:{port}/api/health", timeout=1.0)
+            if response.status_code == 200:
+                return True
+        except Exception:
+            time.sleep(1)
+    return False
+
+
+@pytest.fixture(scope="module")
+def server_process():
+    """Starts the Ripen Hub server in a background process for load testing."""
+    test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "test_db_chaos"))
+    env = _prepare_chaos_env(test_dir)
+
+    log_file_path = os.path.join(test_dir, "server.log")
+    log_file = open(log_file_path, "w", encoding="utf-8", buffering=1)
+
+    # Start the server on a different port to avoid conflict
+    process = subprocess.Popen(
+        [sys.executable, "-u", "-m", "ripen.api.server", "--port", "8378"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        env=env
+    )
+    
+    if not _wait_for_chaos_server(process, 8378):
+        process.terminate()
+        log_file.close()
+        pytest.fail("Chaos server failed to start or health check failed.")
+
+    yield process
+    
+    _stop_chaos_server(process)
     log_file.close()
     
-    try:
-        import shutil
-        shutil.rmtree(test_dir, ignore_errors=True)
-    except Exception:
-        pass
+    import shutil
+    shutil.rmtree(test_dir, ignore_errors=True)
 
 
 @pytest.mark.asyncio

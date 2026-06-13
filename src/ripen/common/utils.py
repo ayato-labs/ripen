@@ -400,8 +400,8 @@ def safe_main_executor(main_func):
                 logger.critical("!" * 60)
                 try:
                     input("\nPress [Enter] to close the terminal...")
-                except (EOFError, KeyboardInterrupt):
-                    pass
+                except (EOFError, KeyboardInterrupt) as e:
+                    logger.debug(f"Terminal exit prompt interrupted: {type(e).__name__}")
             sys.exit(1)
         except KeyboardInterrupt:
             # Usually we don't want to pause on Ctrl+C, just exit quietly

@@ -284,8 +284,11 @@ def main():
     configure_embeddings(config, existing_config)
 
     # 4. Port & Transport
-    config["sse_port"] = existing_config.get("sse_port") or 8377
-    config["default_transport"] = existing_config.get("default_transport") or "sse"
+    port = existing_config.get("http_port") or existing_config.get("sse_port") or 8377
+    config["http_port"] = port
+    config["default_transport"] = existing_config.get("default_transport") or "streamable-http"
+    if config["default_transport"] == "sse":
+        config["default_transport"] = "streamable-http"
 
     # 5. Save Config
     ripen_home_path = Path(config["ripen_home"])
@@ -307,14 +310,16 @@ def main():
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except Exception:
+        except Exception as e:
             try:
+                logger.debug(f"Primary local IP detection failed, trying hostname: {e}")
                 return socket.gethostbyname(socket.gethostname())
-            except Exception:
+            except Exception as e2:
+                logger.debug(f"Final local IP fallback to 127.0.0.1: {e2}")
                 return "127.0.0.1"
 
     local_ip = get_local_ip()
-    port = config.get("sse_port") or 8377
+    port = config.get("http_port") or 8377
     
     logger.info(f"\nClient Connection URL (Local):  \033[1;33mhttp://localhost:{port}/mcp\033[0m")
     if local_ip != "127.0.0.1":

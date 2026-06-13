@@ -41,14 +41,14 @@ def ensure_hub_running(port: int = 8377) -> bool:
     logger.info(f"Ripen Hub not detected on port {port}. Attempting to start in background...")
     
     # On Windows, we use CREATE_NO_WINDOW and DETACHED_PROCESS to run in background
-    # We use 'uv run ripen --sse' as the command
+    # We use 'uv run ripen --http' as the command
     try:
         # Determine the command to run. 
-        # If we are running via uv, we should use 'uv run ripen --sse'
-        # To be safe, we use 'sys.executable -m ripen.api.server --sse' 
-        # but since 'ripen' is a registered script, 'ripen --sse' should work if in path.
+        # If we are running via uv, we should use 'uv run ripen --http'
+        # To be safe, we use 'sys.executable -m ripen.api.server --http' 
+        # but since 'ripen' is a registered script, 'ripen --http' should work if in path.
         
-        cmd = [sys.executable, "-m", "ripen.api.server", "--sse", "--port", str(port)]
+        cmd = [sys.executable, "-m", "ripen.api.server", "--http", "--port", str(port)]
         
         # Set up diagnostic logging for startup
         from ripen.common.config import settings
