@@ -86,19 +86,24 @@ async def _validate_and_insert_thought(
                 "totalThoughts": total_thoughts,
             }
 
-    if not is_revision:
-        if thought_number in existing_numbers:
-            error_msg = (
-                f"Duplicate thought number: #{thought_number} "
-                f"already exists in session '{session_id}'. "
-                "If you intended to revise, set is_revision=True."
+    if thought_number in existing_numbers:
+        error_msg = (
+            f"Duplicate thought number: #{thought_number} "
+            f"already exists in session '{session_id}'. "
+            "Please use a new, unique thought_number even for revisions."
+        )
+        if not is_revision:
+            error_msg += (
+                " If you intended to revise, set is_revision=True and "
+                "revises_thought to the thought you want to revise."
             )
-            logger.warning(error_msg)
-            return {
-                "error": error_msg,
-                "thoughtNumber": thought_number,
-                "totalThoughts": total_thoughts,
-            }
+
+        logger.warning(error_msg)
+        return {
+            "error": error_msg,
+            "thoughtNumber": thought_number,
+            "totalThoughts": total_thoughts,
+        }
 
     # 3. Persistence: Insert thought
     meta_data = json.dumps(
@@ -232,9 +237,21 @@ async def process_thought_core(
                     try:
                         # Auto-distillation is heavier, give it 60 seconds
                         logger.info(f"Triggering final distillation for session {session_id}...")
+                        
+                        # Ensure all items are dicts and include the final thought
+                        full_history_dicts = [
+                            dict(t) if not isinstance(t, dict) else t
+                            for t in history
+                        ]
+                        current_thought_dict = {
+                            "thought_number": thought_number,
+                            "thought": masked_thought,
+                            "session_id": session_id
+                        }
+                        
                         await asyncio.wait_for(
                             auto_distill_knowledge(
-                                session_id, [*history, {"thought": masked_thought}]
+                                session_id, [*full_history_dicts, current_thought_dict]
                             ),
                             timeout=60.0,
                         )
