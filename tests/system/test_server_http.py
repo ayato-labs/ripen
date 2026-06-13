@@ -57,7 +57,7 @@ def server_process():
         env=env
     )
 
-    max_retries = 30
+    max_retries = 60
     retry_interval = 1
     server_ready = False
 
@@ -66,22 +66,25 @@ def server_process():
             log_file.close()
             with open(log_file_path, encoding="utf-8") as f:
                 logs = f.read()
-            msg = f"Server process died unexpectedly with code {process.returncode}. Logs:\n{logs}"
+            msg = f"Server died unexpectedly (code {process.returncode}). Logs:\n{logs}"
             pytest.fail(msg)
 
         try:
-            response = httpx.get("http://localhost:8377/dashboard/", timeout=1.0)
+            # Increased timeout to 2s for slow CI
+            response = httpx.get("http://localhost:8377/dashboard/", timeout=2.0)
             if response.status_code in [200, 307, 401, 404]:
                 server_ready = True
                 break
         except Exception:
+            if _attempt % 10 == 0:
+                print(f"Attempt {_attempt}: Waiting for server to be ready...")
             time.sleep(retry_interval)
 
     if not server_ready:
         log_file.close()
         with open(log_file_path, encoding="utf-8") as f:
             logs = f.read()
-        msg = f"Server failed to start and respond after {max_retries} seconds. Logs:\n{logs}"
+        msg = f"Server failed to start after {max_retries} seconds. Logs:\n{logs}"
         pytest.fail(msg)
 
     yield process
