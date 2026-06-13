@@ -135,9 +135,9 @@ async def dashboard_api_license_activate(request):
 
 @mcp.tool()
 async def save_memory(
-    entities: list[dict],
-    relations: list[dict],
-    observations: list[dict],
+    entities: list[dict] = [],
+    relations: list[dict] = [],
+    observations: list[dict] = [],
     bank_files: list[str] | None = None,
     agent_id: str | None = None,
     wait_for_previous: bool | None = None,
