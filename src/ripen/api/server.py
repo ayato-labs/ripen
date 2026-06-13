@@ -96,7 +96,7 @@ async def lifespan(_mcp_instance: FastMCP) -> AsyncGenerator[None, None]:
         try:
             # Wait briefly for the task to acknowledge cancellation
             await asyncio.wait_for(maintenance_task, timeout=2.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError) as e:
+        except (asyncio.CancelledError, TimeoutError) as e:
             logger.debug(f"Maintenance task shutdown status: {type(e).__name__}")
         
         # Explicitly close all DB connections BEFORE the loop closes
