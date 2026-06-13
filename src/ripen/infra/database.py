@@ -10,9 +10,9 @@ from ripen.common.utils import get_db_path, get_logger, log_error
 
 logger = get_logger("database")
 
-# Global singletons for persistent connections
-_MAIN_CONNECTION: aiosqlite.Connection | None = None
-_THOUGHTS_CONNECTION: aiosqlite.Connection | None = None
+# Global singletons for persistent connections (mapped by loop to prevent cross-loop leakage)
+_MAIN_CONNECTIONS: dict[asyncio.AbstractEventLoop, aiosqlite.Connection] = {}
+_THOUGHTS_CONNECTIONS: dict[asyncio.AbstractEventLoop, aiosqlite.Connection] = {}
 
 # Global locks to prevent race conditions during singleton initialization
 _INIT_LOCKS: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
@@ -24,6 +24,32 @@ def _get_init_lock() -> asyncio.Lock:
     if loop not in _INIT_LOCKS:
         _INIT_LOCKS[loop] = asyncio.Lock()
     return _INIT_LOCKS[loop]
+
+
+def _get_main_conn() -> aiosqlite.Connection | None:
+    loop = asyncio.get_running_loop()
+    return _MAIN_CONNECTIONS.get(loop)
+
+
+def _set_main_conn(conn: aiosqlite.Connection | None):
+    loop = asyncio.get_running_loop()
+    if conn is None:
+        _MAIN_CONNECTIONS.pop(loop, None)
+    else:
+        _MAIN_CONNECTIONS[loop] = conn
+
+
+def _get_thoughts_conn() -> aiosqlite.Connection | None:
+    loop = asyncio.get_running_loop()
+    return _THOUGHTS_CONNECTIONS.get(loop)
+
+
+def _set_thoughts_conn(conn: aiosqlite.Connection | None):
+    loop = asyncio.get_running_loop()
+    if conn is None:
+        _THOUGHTS_CONNECTIONS.pop(loop, None)
+    else:
+        _THOUGHTS_CONNECTIONS[loop] = conn
 
 
 # Global semaphores mapped by event loop to limit concurrent DB writes
@@ -98,59 +124,60 @@ class AsyncSQLiteConnection:
         self.conn = None
 
     async def __aenter__(self):
-        global _MAIN_CONNECTION, _THOUGHTS_CONNECTION
         try:
             logger.debug(f"Waiting for DB init lock (is_thoughts={self.is_thoughts})...")
             async with _get_init_lock():
                 logger.debug(f"DB init lock ACQUIRED (is_thoughts={self.is_thoughts})")
                 if self.is_thoughts:
-                    if _THOUGHTS_CONNECTION is None:
+                    conn = _get_thoughts_conn()
+                    if conn is None:
                         logger.info(f"Establishing NEW thoughts singleton: {self.db_path}")
                         try:
-                            _THOUGHTS_CONNECTION = await aiosqlite.connect(
+                            conn = await aiosqlite.connect(
                                 self.db_path, timeout=30.0
                             )
-                            _THOUGHTS_CONNECTION.row_factory = aiosqlite.Row
+                            conn.row_factory = aiosqlite.Row
                             # --- MATURE TECH OPTIMIZATIONS ---
-                            await _THOUGHTS_CONNECTION.execute("PRAGMA journal_mode = WAL")
-                            await _THOUGHTS_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-                            await _THOUGHTS_CONNECTION.execute(
+                            await conn.execute("PRAGMA journal_mode = WAL")
+                            await conn.execute("PRAGMA synchronous = NORMAL")
+                            await conn.execute(
                                 "PRAGMA mmap_size = 268435456"
                             )  # 256MB
-                            await _THOUGHTS_CONNECTION.execute("PRAGMA temp_store = MEMORY")
-                            await _THOUGHTS_CONNECTION.execute("PRAGMA busy_timeout = 5000")
+                            await conn.execute("PRAGMA temp_store = MEMORY")
+                            await conn.execute("PRAGMA busy_timeout = 5000")
+                            _set_thoughts_conn(conn)
                             logger.info("Thoughts connection PRAGMAs configured (WAL/NORMAL/MMAP).")
                         except Exception as e:
                             logger.error(
                                 f"CRITICAL: Failed to establish thoughts DB connection: {e}"
                             )
-                            if _THOUGHTS_CONNECTION is not None:
-                                await _THOUGHTS_CONNECTION.close()
-                                _THOUGHTS_CONNECTION = None
+                            if conn is not None:
+                                await conn.close()
                             raise
-                    self.conn = _THOUGHTS_CONNECTION
+                    self.conn = conn
                 else:
-                    if _MAIN_CONNECTION is None:
+                    conn = _get_main_conn()
+                    if conn is None:
                         logger.info(f"Establishing NEW singleton connection to: {self.db_path}")
                         try:
-                            _MAIN_CONNECTION = await aiosqlite.connect(self.db_path, timeout=30.0)
-                            _MAIN_CONNECTION.row_factory = aiosqlite.Row
+                            conn = await aiosqlite.connect(self.db_path, timeout=30.0)
+                            conn.row_factory = aiosqlite.Row
                             # --- MATURE TECH OPTIMIZATIONS ---
-                            await _MAIN_CONNECTION.execute("PRAGMA foreign_keys = ON")
-                            await _MAIN_CONNECTION.execute("PRAGMA journal_mode = WAL")
-                            await _MAIN_CONNECTION.execute("PRAGMA synchronous = NORMAL")
-                            await _MAIN_CONNECTION.execute("PRAGMA mmap_size = 268435456")  # 256MB
-                            await _MAIN_CONNECTION.execute("PRAGMA temp_store = MEMORY")
-                            await _MAIN_CONNECTION.execute("PRAGMA busy_timeout = 5000")
-                            await _MAIN_CONNECTION.execute("PRAGMA cache_size = -64000")  # ~64MB
+                            await conn.execute("PRAGMA foreign_keys = ON")
+                            await conn.execute("PRAGMA journal_mode = WAL")
+                            await conn.execute("PRAGMA synchronous = NORMAL")
+                            await conn.execute("PRAGMA mmap_size = 268435456")  # 256MB
+                            await conn.execute("PRAGMA temp_store = MEMORY")
+                            await conn.execute("PRAGMA busy_timeout = 5000")
+                            await conn.execute("PRAGMA cache_size = -64000")  # ~64MB
+                            _set_main_conn(conn)
                             logger.info("Main connection successfully established and configured.")
                         except Exception as e:
                             logger.error(f"CRITICAL: Failed to establish main DB connection: {e}")
-                            if _MAIN_CONNECTION is not None:
-                                await _MAIN_CONNECTION.close()
-                                _MAIN_CONNECTION = None
+                            if conn is not None:
+                                await conn.close()
                             raise
-                    self.conn = _MAIN_CONNECTION
+                    self.conn = conn
 
             logger.debug(
                 f"AsyncSQLiteConnection: Returning connection for {self.db_path} "
@@ -180,20 +207,24 @@ class AsyncSQLiteConnection:
 
 async def close_all_connections():
     """
-    Closes all singleton connections. Should be called during server shutdown
-    or between tests to ensure isolation.
+    Closes all singleton connections for the current loop. 
+    Should be called during server shutdown or between tests to ensure isolation.
     """
-    global _MAIN_CONNECTION, _THOUGHTS_CONNECTION, _DB_INITIALIZED
-    logger.info("Closing all singleton database connections...")
+    global _DB_INITIALIZED
+    logger.info("Closing all singleton database connections for current loop...")
     async with _get_init_lock():
-        if _MAIN_CONNECTION:
-            await _MAIN_CONNECTION.close()
-            _MAIN_CONNECTION = None
+        main_conn = _get_main_conn()
+        if main_conn:
+            await main_conn.close()
+            _set_main_conn(None)
             logger.info("Main connection closed.")
-        if _THOUGHTS_CONNECTION:
-            await _THOUGHTS_CONNECTION.close()
-            _THOUGHTS_CONNECTION = None
+        
+        thoughts_conn = _get_thoughts_conn()
+        if thoughts_conn:
+            await thoughts_conn.close()
+            _set_thoughts_conn(None)
             logger.info("Thoughts connection closed.")
+            
         _DB_INITIALIZED = False
 
 

@@ -33,7 +33,12 @@ async def lifespan(_mcp_instance: FastMCP):
     await init_db()
     await thought_logic.init_thoughts_db()
 
-    yield
+    try:
+        yield
+    finally:
+        logger.info("Admin Server: Closing database connections...")
+        from ripen.infra.database import close_all_connections
+        await close_all_connections()
 
 
 # ==========================================

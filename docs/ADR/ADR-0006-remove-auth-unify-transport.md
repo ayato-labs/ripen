@@ -14,13 +14,14 @@ Additionally, the codebase uses inconsistent terminology for the transport layer
 2.  **Unify Transport Terminology**: Rename internal variables, configuration keys, and log messages from "SSE" to "Streamable HTTP" (or simply "HTTP") to align with current architectural standards.
 3.  **Defer Advanced Auth**: Robust authentication (JWT, multi-user isolation) will be reconsidered as a post-MVP feature once the core memory functions are stabilized and verified in team environments.
 4.  **Adopt Dynamic Health Checks for System Tests**: Replace fixed `time.sleep()` calls in system test fixtures with dynamic health check loops. This ensures tests wait the minimum necessary time for the server to be ready while providing a longer overall timeout for slower CI/CD environments.
+5.  **Strict Lifecycle Management for Database Connections**: Ensure all database connections are loop-bound and explicitly closed during server shutdown (lifespan) and between tests. This prevents `RuntimeError: Event loop is closed` errors caused by background worker threads trying to callback to a closed event loop.
 
 ## Consequences
 ### Positive
 - **Reduced Friction**: Users can start the Hub and connect agents without troubleshooting authentication errors.
 - **Architectural Clarity**: Removal of legacy/unused code paths simplifies debugging and future development.
 - **Improved Documentation**: Aligning code terminology with FastMCP standards makes the system easier to understand for new contributors.
-- **Reliable CI/CD**: Dynamic health checks eliminate race conditions in system tests, reducing flaky build failures.
+- **Reliable CI/CD**: Dynamic health checks and strict connection closing eliminate race conditions and noisy background thread crashes.
 
 ### Negative / Risks
 - **No Access Control**: In the MVP phase, any agent on the same network (if host is `0.0.0.0`) can read/write to the hub. This is accepted for the current development stage and LAN-only use cases.

@@ -91,11 +91,18 @@ async def lifespan(_mcp_instance: FastMCP) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
+        logger.info("Ripen Hub: Shutting down lifespan tasks...")
         maintenance_task.cancel()
         try:
-            await maintenance_task
-        except asyncio.CancelledError:
+            # Wait briefly for the task to acknowledge cancellation
+            await asyncio.wait_for(maintenance_task, timeout=2.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
+        
+        # Explicitly close all DB connections BEFORE the loop closes
+        from ripen.infra.database import close_all_connections
+        await close_all_connections()
+        logger.info("Ripen Hub: Lifespan shutdown complete.")
 
 mcp._lifespan = lifespan
 
@@ -434,9 +441,6 @@ def main():
         os.environ["LOG_LEVEL"] = "DEBUG"
     
     use_http, _ = _detect_mode(args)
-
-    signal.signal(signal.SIGINT, lambda _s, _f: sys.exit(0))
-    signal.signal(signal.SIGTERM, lambda _s, _f: sys.exit(0))
 
     if use_http:
         port = args.port or settings.http_port or 8377
