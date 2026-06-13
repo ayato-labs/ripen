@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import json
 import os
-import signal
 import socket
 import sys
 from collections.abc import AsyncGenerator
@@ -91,11 +90,18 @@ async def lifespan(_mcp_instance: FastMCP) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
+        logger.info("Ripen Hub: Shutting down lifespan tasks...")
         maintenance_task.cancel()
         try:
-            await maintenance_task
-        except asyncio.CancelledError:
-            pass
+            # Wait briefly for the task to acknowledge cancellation
+            await asyncio.wait_for(maintenance_task, timeout=2.0)
+        except (asyncio.CancelledError, TimeoutError) as e:
+            logger.debug(f"Maintenance task shutdown status: {type(e).__name__}")
+        
+        # Explicitly close all DB connections BEFORE the loop closes
+        from ripen.infra.database import close_all_connections
+        await close_all_connections()
+        logger.info("Ripen Hub: Lifespan shutdown complete.")
 
 mcp._lifespan = lifespan
 
@@ -435,9 +441,6 @@ def main():
     
     use_http, _ = _detect_mode(args)
 
-    signal.signal(signal.SIGINT, lambda _s, _f: sys.exit(0))
-    signal.signal(signal.SIGTERM, lambda _s, _f: sys.exit(0))
-
     if use_http:
         port = args.port or settings.http_port or 8377
         _kill_port_process(port)
@@ -478,8 +481,8 @@ def _kill_port_process(port: int):
                             check=False,
                             capture_output=True
                         )
-        except subprocess.CalledProcessError:
-            pass
+        except subprocess.CalledProcessError as e:
+            logger.debug(f"Cleanup netstat check failed (normal if port is free): {e}")
 
         # 2. Kill by name
         subprocess.run(

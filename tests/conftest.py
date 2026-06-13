@@ -25,6 +25,12 @@ async def setup_teardown_db(request):
     os.environ["THOUGHTS_DB_PATH"] = os.path.join(home_dir, "thoughts.db")
     os.environ["MEMORY_BANK_DIR"] = os.path.join(home_dir, "bank")
 
+    # Force reset settings cache to pick up new environment variables
+    from ripen.common.config import settings
+    settings._base_dir = None
+    settings._api_key = None
+    settings._config_data = {}
+
     # Load global config.json api key if GEMINI_API_KEY is not set or is a placeholder
     curr_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not curr_key or "your_gemini_api_key_here" in curr_key:
@@ -44,6 +50,8 @@ async def setup_teardown_db(request):
 
     # Initialize databases for each test (Skip for system tests to avoid locking)
     if "system" not in str(request.node.fspath):
+        from ripen.infra.database import close_all_connections, init_db
+        await close_all_connections()
         await init_db(force=True)
         await init_thoughts_db(force=True)
 
@@ -58,26 +66,12 @@ async def setup_teardown_db(request):
         # Still need to create the directory so env vars point to a valid place
         os.makedirs(os.environ["MEMORY_BANK_DIR"], exist_ok=True)
 
-    # Reset database singletons and locks
-    from ripen.infra import database
-
-    database._MAIN_CONNECTION = None
-    database._THOUGHTS_CONNECTION = None
-    database._INIT_LOCK = None
-    database._DB_INITIALIZED = False
-    database._WRITE_SEMAPHORES = {}
-
-    # Reset AI control locks
-    from ripen.core import ai_control
-
-    ai_control.model_manager._lock = None
-    ai_control.AIRateLimiter._locks = {}
-
     yield
 
     # Teardown: Close singleton connections before rmtree (Windows requirement)
     try:
         from ripen.api.server import wait_for_background_tasks
+        from ripen.infra.database import close_all_connections
 
         await wait_for_background_tasks(timeout=2.0)
         await close_all_connections()
