@@ -284,7 +284,8 @@ def main():
     configure_embeddings(config, existing_config)
 
     # 4. Port & Transport
-    config["http_port"] = existing_config.get("http_port") or existing_config.get("sse_port") or 8377
+    port = existing_config.get("http_port") or existing_config.get("sse_port") or 8377
+    config["http_port"] = port
     config["default_transport"] = existing_config.get("default_transport") or "streamable-http"
     if config["default_transport"] == "sse":
         config["default_transport"] = "streamable-http"

@@ -1,6 +1,6 @@
+import getpass
 import os
 from contextvars import ContextVar
-import getpass
 
 from ripen.common.utils import get_logger
 
