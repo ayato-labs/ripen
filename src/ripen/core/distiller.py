@@ -23,7 +23,7 @@ async def auto_distill_knowledge(session_id: str, thought_history: list[dict[str
     # 1. Format thoughts for the prompt
     formatted_thoughts = "\n".join(
         [
-            f"Step {t.get('thought_number', '??') if isinstance(t, dict) else getattr(t, 'thought_number', '??')}: "
+            f"Step {t.get('thought_number', '??') if isinstance(t, dict) else getattr(t, 'thought_number', '??')}: "  # noqa: E501
             f"{t.get('thought', '') if isinstance(t, dict) else getattr(t, 'thought', '')}"
             for t in thought_history
         ]

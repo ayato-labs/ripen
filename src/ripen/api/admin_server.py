@@ -47,7 +47,11 @@ async def lifespan(_mcp_instance: FastMCP):
 
 
 @mcp.tool()
-async def admin_get_audit_history(limit: int = 20, table_name: str | None = None, wait_for_previous: bool | None = None):
+async def admin_get_audit_history(
+    limit: int = 20,
+    table_name: str | None = None,
+    wait_for_previous: bool | None = None,  # noqa: ARG001
+):
     """Retrieves the history of all changes made to the memory."""
     enforce_auth()
     async with UnitOfWork() as uow:
@@ -55,7 +59,7 @@ async def admin_get_audit_history(limit: int = 20, table_name: str | None = None
 
 
 @mcp.tool()
-async def admin_get_memory_health(wait_for_previous: bool | None = None):
+async def admin_get_memory_health(wait_for_previous: bool | None = None):  # noqa: ARG001
     """Performs deep diagnostics on database, storage, and API connectivity."""
     enforce_auth()
     async with UnitOfWork() as uow:
@@ -63,7 +67,7 @@ async def admin_get_memory_health(wait_for_previous: bool | None = None):
 
 
 @mcp.tool()
-async def admin_repair_memory(wait_for_previous: bool | None = None):
+async def admin_repair_memory(wait_for_previous: bool | None = None):  # noqa: ARG001
     """Syncs the file bank from the database to recover lost or corrupted files."""
     enforce_auth()
     async with SecureWriteContext() as uow:
@@ -73,7 +77,7 @@ async def admin_repair_memory(wait_for_previous: bool | None = None):
 
 
 @mcp.tool()
-async def admin_rollback_memory(audit_id: int, wait_for_previous: bool | None = None):
+async def admin_rollback_memory(audit_id: int, wait_for_previous: bool | None = None):  # noqa: ARG001
     """Reverts a specific change based on its audit log ID."""
     enforce_auth()
     async with SecureWriteContext() as uow:
@@ -83,7 +87,11 @@ async def admin_rollback_memory(audit_id: int, wait_for_previous: bool | None = 
 
 
 @mcp.tool()
-async def admin_create_snapshot(name: str, description: str = "", wait_for_previous: bool | None = None):
+async def admin_create_snapshot(
+    name: str,
+    description: str = "",
+    wait_for_previous: bool | None = None,  # noqa: ARG001
+):
     """Creates a point-in-time backup of the entire memory database."""
     enforce_auth()
     async with SecureWriteContext() as uow:
@@ -93,7 +101,7 @@ async def admin_create_snapshot(name: str, description: str = "", wait_for_previ
 
 
 @mcp.tool()
-async def admin_restore_snapshot(snapshot_id: int, wait_for_previous: bool | None = None):
+async def admin_restore_snapshot(snapshot_id: int, wait_for_previous: bool | None = None):  # noqa: ARG001
     """Restores the database to a previously created snapshot."""
     enforce_auth()
     async with SecureWriteContext() as uow:
@@ -103,7 +111,10 @@ async def admin_restore_snapshot(snapshot_id: int, wait_for_previous: bool | Non
 
 
 @mcp.tool()
-async def admin_get_value_report(format_type: str = "markdown", wait_for_previous: bool | None = None):
+async def admin_get_value_report(
+    format_type: str = "markdown",
+    wait_for_previous: bool | None = None,  # noqa: ARG001
+):
     """
     Returns an objective value report (Fact-Based) of the memory server.
     """
@@ -113,7 +124,11 @@ async def admin_get_value_report(format_type: str = "markdown", wait_for_previou
 
 
 @mcp.tool()
-async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False, wait_for_previous: bool | None = None):
+async def admin_run_knowledge_gc(
+    age_days: int = 180,
+    dry_run: bool = False,
+    wait_for_previous: bool | None = None,  # noqa: ARG001
+):
     """
     Manually triggers the Knowledge Garbage Collection (GC) logic.
     """

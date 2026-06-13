@@ -93,8 +93,11 @@ async def _validate_and_insert_thought(
             "Please use a new, unique thought_number even for revisions."
         )
         if not is_revision:
-            error_msg += " If you intended to revise, set is_revision=True and revises_thought to the thought you want to revise."
-        
+            error_msg += (
+                " If you intended to revise, set is_revision=True and "
+                "revises_thought to the thought you want to revise."
+            )
+
         logger.warning(error_msg)
         return {
             "error": error_msg,
@@ -236,7 +239,10 @@ async def process_thought_core(
                         logger.info(f"Triggering final distillation for session {session_id}...")
                         
                         # Ensure all items are dicts and include the final thought
-                        full_history_dicts = [dict(t) if not isinstance(t, dict) else t for t in history]
+                        full_history_dicts = [
+                            dict(t) if not isinstance(t, dict) else t
+                            for t in history
+                        ]
                         current_thought_dict = {
                             "thought_number": thought_number,
                             "thought": masked_thought,
