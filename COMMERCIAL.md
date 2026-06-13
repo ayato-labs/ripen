@@ -2,6 +2,23 @@
 
 Ripen は、オープンソースコミュニティへの貢献と、プロフェッショナルな開発チームによる持続可能な利用の両立を目指しています。
 
+## 0. 依存技術のライセンスと安全性 (Dependency License Clearance)
+
+Ripenが使用しているサードパーティ製のライブラリや推奨インフラは、すべてエンタープライズ環境で安全に利用可能な寛容なライセンス（MIT / Apache 2.0 等）のみで構成されています。企業のコンプライアンス審査時に提出可能な証明として、以下の表をご活用ください。
+
+| コンポーネント / ライブラリ | 役割 | ライセンス | 根拠となるURL (LICENSE) |
+| :--- | :--- | :--- | :--- |
+| **Ollama** | 推奨ローカルLLMインフラ | MIT | [LICENSE](https://github.com/ollama/ollama/blob/main/LICENSE) |
+| **aiosqlite** | 非同期DBアクセス | MIT | [LICENSE](https://github.com/omnilib/aiosqlite/blob/main/LICENSE) |
+| **loguru** | ロギング | MIT | [LICENSE](https://github.com/Delgan/loguru/blob/master/LICENSE) |
+| **mcp** | Model Context Protocol SDK | MIT | [LICENSE](https://github.com/modelcontextprotocol/python-sdk/blob/main/LICENSE) |
+| **google-genai** | Gemini API クライアント | Apache 2.0 | [LICENSE](https://github.com/google/genai-python/blob/main/LICENSE) |
+| **fastembed** | ローカルベクトル埋め込み | MIT | [LICENSE](https://github.com/qdrant/fastembed/blob/main/LICENSE) |
+| **faiss-cpu** | ベクトル検索エンジン | MIT | [LICENSE](https://github.com/facebookresearch/faiss/blob/main/LICENSE) |
+| **pydantic** | データバリデーション | MIT | [LICENSE](https://github.com/pydantic/pydantic/blob/main/LICENSE) |
+
+*(※注意: Ollama等のインフラ自体はMITですが、その上でダウンロードして実行するLLMモデル（Llama 3, Gemma等）には各社独自のライセンスが存在します。モデルごとの商用利用条件は別途ご確認ください。)*
+
 ## 1. オープンソース利用 (AGPL-3.0)
 個人利用、教育目的、またはソースコードを公開できるプロジェクトでは、引き続き **AGPL-3.0** の下で無料で利用可能です。
 **重要**: Ripen をネットワーク越しに提供（SaaS）したり、改変して利用したりする場合、そのソースコードをユーザーに対して公開する義務があります。

@@ -370,6 +370,22 @@ Your knowledge is your most valuable asset. Ripen is designed to give you full c
 
 ---
 
+## 🏢 商用・ビジネス利用について (Commercial & Enterprise Use)
+
+Ripenは、エンタープライズ環境やビジネス用途でも安心して導入できるよう設計されています。
+
+1. **クリーンな依存関係**
+   Ripenが利用しているすべての外部ライブラリ（FastEmbed, FAISS, MCP SDKなど）および推奨ローカルインフラ（Ollama）は、**MIT または Apache License 2.0** などの寛容なオープンソースライセンスのみを採用しています。企業内のライセンス審査において、依存関係がブロッカーになることはありません。
+   *(※ユーザーがローカルで実行するLLMモデル自体のライセンスは別途ご確認ください)*
+
+2. **Ripen本体のライセンスと商用トライアル**
+   Ripen本体は **AGPL-3.0** で公開されていますが、外部のAIエージェント（CursorやClaude等）から「単にMCPサーバーとして接続して利用する」限り、**ユーザー独自のソースコードに公開義務は発生しません。** 
+   また、社内コンプライアンス上の懸念がある企業向けに、ソースコード公開義務を免除する「**180日間の無料商用トライアル**」も提供しています。
+
+企業の法務担当者向けの詳細な見解や、商用トライアルの開始方法については、[COMMERCIAL.md](./COMMERCIAL.md) をご一読ください。
+
+---
+
 ## License
 
 - **Open Source**: [AGPL-3.0](LICENSE) — free for personal and open-source use.
