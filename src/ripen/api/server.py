@@ -96,8 +96,8 @@ async def lifespan(_mcp_instance: FastMCP) -> AsyncGenerator[None, None]:
         try:
             # Wait briefly for the task to acknowledge cancellation
             await asyncio.wait_for(maintenance_task, timeout=2.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
-            pass
+        except (asyncio.CancelledError, asyncio.TimeoutError) as e:
+            logger.debug(f"Maintenance task shutdown status: {type(e).__name__}")
         
         # Explicitly close all DB connections BEFORE the loop closes
         from ripen.infra.database import close_all_connections
@@ -482,8 +482,8 @@ def _kill_port_process(port: int):
                             check=False,
                             capture_output=True
                         )
-        except subprocess.CalledProcessError:
-            pass
+        except subprocess.CalledProcessError as e:
+            logger.debug(f"Cleanup netstat check failed (normal if port is free): {e}")
 
         # 2. Kill by name
         subprocess.run(

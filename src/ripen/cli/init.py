@@ -310,10 +310,12 @@ def main():
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except Exception:
+        except Exception as e:
             try:
+                logger.debug(f"Primary local IP detection failed, trying hostname: {e}")
                 return socket.gethostbyname(socket.gethostname())
-            except Exception:
+            except Exception as e2:
+                logger.debug(f"Final local IP fallback to 127.0.0.1: {e2}")
                 return "127.0.0.1"
 
     local_ip = get_local_ip()
