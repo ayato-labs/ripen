@@ -53,6 +53,7 @@ def server_process():
         [sys.executable, "-m", "ripen.api.server", "--port", "8377"],
         stdout=log_file,
         stderr=log_file,
+        stdin=subprocess.DEVNULL,
         text=True,
         env=env
     )
