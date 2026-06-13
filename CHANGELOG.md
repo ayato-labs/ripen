@@ -2,6 +2,88 @@
 
 <!-- version list -->
 
+## v1.21.0 (2026-06-07)
+
+### Features
+
+- Implement interactive CLI initialization for Ripen configuration
+  ([`988d839`](https://github.com/ayato-labs/ripen/commit/988d8391d0f552f209c165af6d576da643be5b80))
+
+
+## v1.20.0 (2026-06-07)
+
+### Bug Fixes
+
+- Trigger CI/CD pipeline on develop branch push
+  ([`4267d5b`](https://github.com/ayato-labs/ripen/commit/4267d5b1356c952ee0647d17d8bcde404194cfdc))
+
+### Documentation
+
+- Add ADRs for enabling binary builds on PRs and publishing development pre-releases
+  ([`637b862`](https://github.com/ayato-labs/ripen/commit/637b8622ca07c8dcc86044807b23f73c04023321))
+
+### Features
+
+- Add CI/CD pipeline with linting, testing, semantic release, and Windows binary packaging workflows
+  ([`26e995e`](https://github.com/ayato-labs/ripen/commit/26e995e5cee9a7fbbf6548ce259a6b4b9d5565b1))
+
+- Add CLI initialization module to configure storage, LLM providers, and embedding engines
+  ([`e4eb469`](https://github.com/ayato-labs/ripen/commit/e4eb4698dd8777c8061a76f8fda2a28752a565ef))
+
+- Add interactive CLI setup utility for initial configuration
+  ([`6533729`](https://github.com/ayato-labs/ripen/commit/65337292df6fd06050df0f3d640335b8cf209999))
+
+- Add scratch scripts for conflict resolution and ADR persistence
+  ([`fa98785`](https://github.com/ayato-labs/ripen/commit/fa9878535a26a784ef723c2e5e4bfdf2e0abe040))
+
+- Customize setup wizard with LLM/embedding choices and add automatic re-embedding migration
+  ([`9e93ba4`](https://github.com/ayato-labs/ripen/commit/9e93ba4cab679fbe39f5fd0f217066afb0f29baf))
+
+- Implement interactive CLI initialization for Ripen configuration and LLM/embedding provider setup
+  ([`e758c42`](https://github.com/ayato-labs/ripen/commit/e758c429b9fe8429876312f3c3fba1d5cbb15e54))
+
+- Implement interactive CLI initialization script for configuration setup
+  ([`74e367d`](https://github.com/ayato-labs/ripen/commit/74e367db707d677ae05ccaae0e592192d1f9394a))
+
+- Implement Ripen Hub MCP server with memory tools and permissive handshake protocol patching
+  ([`7816733`](https://github.com/ayato-labs/ripen/commit/7816733d9c3342fe361047b70f53f5afffba0132))
+
+- Output private IP endpoints in setup wizard and server banner
+  ([`6f85149`](https://github.com/ayato-labs/ripen/commit/6f85149e30addc7adf8d04d11ebfc1d9ca7ae358))
+
+### Refactoring
+
+- Deprecate RipenInstaller and enable binary builds on develop
+  ([`a3e786a`](https://github.com/ayato-labs/ripen/commit/a3e786a2480b3721b38a9914df77a656617bec8b))
+
+- Publish dev builds as dev-latest pre-releases
+  ([`fc1e2ce`](https://github.com/ayato-labs/ripen/commit/fc1e2cec200a03a74b737680f36e5660f889eaaf))
+
+- Resolve ruff complexity and line length violations in setup wizard and migration ops
+  ([`48116ec`](https://github.com/ayato-labs/ripen/commit/48116ec477ea5ee4398dfe28957d69a32b2781df))
+
+
+## v1.19.1 (2026-05-24)
+
+### Bug Fixes
+
+- Ensure terminal does not close abruptly on fatal error
+  ([`fb63ccd`](https://github.com/ayato-labs/ripen/commit/fb63ccd1cf4a37e6f1634708e77561ba78116c30))
+
+
+## v1.19.0 (2026-05-24)
+
+### Bug Fixes
+
+- Remove unnecessary macOS native test job
+  ([`bf7a858`](https://github.com/ayato-labs/ripen/commit/bf7a8587c9413a198b2f625f1a3ed0f223a97751))
+
+### Features
+
+- Add RipenInit binary release and document setup wizard
+  ([`16f8969`](https://github.com/ayato-labs/ripen/commit/16f896926578d1f549e2c766a645d6fc17a4bad3))
+
+
 ## v1.18.1 (2026-05-24)
 
 ### Bug Fixes

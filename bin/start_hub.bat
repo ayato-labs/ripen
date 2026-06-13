@@ -3,7 +3,7 @@ setlocal
 pushd "%~dp0.."
 
 echo.
-echo [Ripen Hub] Starting Server (SSE Mode)...
+echo [Ripen Hub] Starting Server (Streamable HTTP Mode)...
 echo ----------------------------------------
 
 set PORT=8377

@@ -49,15 +49,7 @@ mcp = FastMCP(
     version="3.2.4",
 )
 
-from ripen.api.auth import AuthMiddleware, get_current_user
-
-if hasattr(mcp, "app"):
-    logger.info("Applying AuthMiddleware to mcp.app")
-    mcp.app.add_middleware(AuthMiddleware)
-else:
-    logger.warning("mcp instance does not have 'app' attribute. Could not apply AuthMiddleware.")
-
-
+from ripen.api.auth import get_current_user
 
 
 def handle_exception(_loop, context):
@@ -151,8 +143,6 @@ async def save_memory(
         f"Tool called: save_memory (Entities: {len(entities)}, Relations: {len(relations)})"
     )
     user = agent_id or get_current_user()
-    if not user:
-        raise Exception("Authentication required. Please provide a valid API key.")
     try:
         await logic_module.save_memory_core(
             entities=entities,
@@ -196,8 +186,6 @@ async def sequential_thinking(
     """
     logger.info(f"Tool called: sequential_thinking (Thought {thought_number}/{total_thoughts})")
     user = get_current_user()
-    if not user:
-        raise Exception("Authentication required. Please provide a valid API key.")
     try:
         result = await thought_module.process_thought_core(
             thought=thought,
@@ -380,45 +368,9 @@ def print_banner(mode: str, port: int, version: str):
             sys.stderr.write(line.encode('ascii', 'ignore').decode('ascii') + "\n")
     sys.stderr.flush()
 
-def main():
-    configure_logging()
-    import importlib.metadata
-    try:
-        version = importlib.metadata.version("ripen")
-    except importlib.metadata.PackageNotFoundError:
-        version = "unknown"
-    logger.info(f"--- SERVER SCRIPT STARTING (Version: {version}) ---")
-    logger.info(f"Main execution started (Args: {sys.argv})")
 
-
-    parser = argparse.ArgumentParser(description="Ripen Hub Server")
-    parser.add_argument("--port", type=int, help="Port for the server")
-    parser.add_argument("--host", default="0.0.0.0", help="Host for the server")
-    parser.add_argument("--dev", action="store_true", help="Start in development mode")
-
-
-    args = parser.parse_args()
-    logger.debug("Arguments parsed successfully.")
-
-    if args.dev:
-        os.environ["LOG_LEVEL"] = "DEBUG"
-
-    # Handle termination signals
-    def handle_signal(sig, _frame):
-        logger.info(f"Signal {sig} received. Shutting down...")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
-
-    port = args.port or settings.sse_port or 8377
-    logger.info(f"Port check: port={port}")
-
-    logger.info("Starting cleanup and port check...")
-    _kill_port_process(port)
-    logger.info("Cleanup completed. Checking port availability...")
-
-    # Double check port availability
+def _verify_port_is_free(port: int):
+    """Checks if a port is available and exits if not."""
     import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     result = sock.connect_ex(("127.0.0.1", port))
@@ -432,18 +384,26 @@ def main():
     sock.close()
     logger.info("Port is available.")
 
-    # Load plugins before starting
-    logger.info("Loading plugins...")
-    PluginLoader.load_all(context={"settings": settings})
-    logger.info("Plugins loaded. Printing banner...")
-    print_banner("Streamable HTTP", port, version)
-    logger.info("Banner printed. Running FastMCP server...")
 
-    local_ip = get_local_ip()
-    hostname = get_local_hostname()
-    logger.info(f"Ripen Server starting on host: {args.host}, port: {port}")
+def _detect_mode(args: argparse.Namespace) -> tuple[bool, bool]:
+    """Determines transport mode based on args and settings."""
+    use_http = args.http or args.sse
+    use_stdio = args.stdio
+    
+    if not use_http and not use_stdio:
+        use_http = settings.default_transport == "streamable-http"
+        use_stdio = settings.default_transport == "stdio"
+    
+    if not use_http and not use_stdio:
+        use_http = True
+        
+    return use_http, use_stdio
+
+
+def _log_endpoints(host: str, port: int, local_ip: str, hostname: str):
+    """Logs the accessibility endpoints."""
     logger.info(f"API Endpoint (local): http://localhost:{port}/mcp")
-    if args.host == "0.0.0.0":
+    if host == "0.0.0.0":
         if local_ip != "127.0.0.1":
             logger.info(f"API Endpoint (network IP): http://{local_ip}:{port}/mcp")
             logger.info(f"Dashboard (network IP): http://{local_ip}:{port}/dashboard")
@@ -451,7 +411,47 @@ def main():
             logger.info(f"API Endpoint (mDNS hostname): http://{hostname}.local:{port}/mcp")
             logger.info(f"Dashboard (mDNS hostname): http://{hostname}.local:{port}/dashboard")
 
-    mcp.run(transport="streamable-http", host=args.host, port=port, show_banner=False)
+
+def main():
+    configure_logging()
+    import importlib.metadata
+    try:
+        version = importlib.metadata.version("ripen")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+    logger.info(f"--- SERVER SCRIPT STARTING (Version: {version}) ---")
+
+    parser = argparse.ArgumentParser(description="Ripen Hub Server")
+    parser.add_argument("--port", type=int, help="Port for the server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host for the server")
+    parser.add_argument("--http", action="store_true", help="Start in Streamable HTTP mode")
+    parser.add_argument("--sse", action="store_true", help="Alias for --http (Deprecated)")
+    parser.add_argument("--stdio", action="store_true", help="Start in Standard I/O mode")
+    parser.add_argument("--dev", action="store_true", help="Start in development mode")
+
+    args = parser.parse_args()
+    if args.dev:
+        os.environ["LOG_LEVEL"] = "DEBUG"
+    
+    use_http, _ = _detect_mode(args)
+
+    signal.signal(signal.SIGINT, lambda _s, _f: sys.exit(0))
+    signal.signal(signal.SIGTERM, lambda _s, _f: sys.exit(0))
+
+    if use_http:
+        port = args.port or settings.http_port or 8377
+        _kill_port_process(port)
+        _verify_port_is_free(port)
+
+        PluginLoader.load_all(context={"settings": settings})
+        print_banner("Streamable HTTP", port, version)
+        
+        _log_endpoints(args.host, port, get_local_ip(), get_local_hostname())
+        mcp.run(transport="streamable-http", host=args.host, port=port, show_banner=False)
+    else:
+        logger.info("Starting Ripen Hub in Standard I/O mode...")
+        PluginLoader.load_all(context={"settings": settings})
+        mcp.run(transport="stdio")
 
 
 def _kill_port_process(port: int):
@@ -463,61 +463,37 @@ def _kill_port_process(port: int):
         return
 
     current_pid = os.getpid()
-    logger.info(f"Executing _kill_port_process for port {port} (Current PID: {current_pid})")
     try:
         import subprocess
         # 1. Kill by port
         cmd = f"netstat -ano | findstr :{port}"
-        logger.debug(f"Running: {cmd}")
         try:
             output = subprocess.check_output(cmd, shell=True).decode()
-            logger.debug(f"netstat output: {output}")
             for line in output.strip().split("\n"):
                 if "LISTENING" in line:
-                    parts = line.strip().split()
-                    if parts:
-                        pid = parts[-1]
-                        try:
-                            pid_int = int(pid)
-                            if pid_int not in (0, current_pid):
-                                logger.warning(f"Killing zombie process {pid_int} on port {port}")
-                                subprocess.run(
-                                    ["taskkill", "/F", "/T", "/PID", str(pid_int)],
-                                    check=False,
-                                    capture_output=True,
-                                )
-                        except ValueError:
-                            logger.warning(f"Could not parse PID from line: {line}")
+                    pid = line.strip().split()[-1]
+                    if int(pid) not in (0, current_pid):
+                        subprocess.run(
+                            ["taskkill", "/F", "/T", "/PID", pid],
+                            check=False,
+                            capture_output=True
+                        )
         except subprocess.CalledProcessError:
-            logger.debug("No process found listening on port.")
+            pass
 
-        # 2. Kill by name (Aggressive Cleanup)
-        # This ensures no duplicate proxies or hubs are hanging around
-        # We MUST exclude our own PID to avoid self-termination
-        logger.debug("Performing aggressive cleanup...")
-        # Note: taskkill /IM kills by process name. If the current process is
-        # ripen.exe, this would kill it.
-        # We use /FI to exclude the current PID.
+        # 2. Kill by name
         subprocess.run(
             f'taskkill /F /IM ripen.exe /FI "PID ne {current_pid}"',
-            shell=True,
-            check=False,
-            capture_output=True,
+            shell=True, check=False, capture_output=True
         )
-        
-        # We removed the WMIC-based cleanup because its command line often matched 
-        # the filter pattern, causing the shell to terminate prematurely.
-        # The netstat check above is sufficient for port conflicts.
-            
     except Exception as e:
         logger.error(f"Aggressive cleanup failed: {e}")
 
 
 async def wait_for_background_tasks(timeout: float = 5.0):
-    """
-    Waits for all registered background tasks to complete or timeout.
-    """
+    """Waits for all registered background tasks to complete or timeout."""
     await _wait_tasks(timeout=timeout)
+
 
 if __name__ == "__main__":
     safe_main_executor(main)()
