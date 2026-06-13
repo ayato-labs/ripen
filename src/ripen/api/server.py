@@ -27,8 +27,8 @@ from ripen.infra.llm import get_llm_provider
 from ripen.ops.lifecycle import start_database_maintenance
 
 
-async def ensure_initialized():
-    """Legacy helper for tests and external scripts."""
+async def ensure_database_initialized():
+    """Helper for tests and external scripts to ensure DB is ready."""
     await init_db()
     await thought_module.init_thoughts_db()
 
@@ -44,7 +44,7 @@ logger = get_logger("server")
 
 # Create FastMCP server instance
 mcp = FastMCP(
-    "Ripen-v2",
+    "Ripen",
     version="3.2.4",
 )
 

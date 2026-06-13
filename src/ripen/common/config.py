@@ -204,7 +204,7 @@ class Settings:
     @property
     def default_transport(self) -> str:
         """デフォルトの通信方式 (stdio or streamable-http) を返す。"""
-        transport = self.get("DEFAULT_TRANSPORT", "stdio").lower()
+        transport = self.get("DEFAULT_TRANSPORT", "streamable-http").lower()
         if transport == "sse":
             return "streamable-http"
         return transport

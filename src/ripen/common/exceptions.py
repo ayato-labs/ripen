@@ -1,10 +1,10 @@
-class SharedMemoryError(Exception):
+class RipenError(Exception):
     """Base exception for Ripen."""
 
     pass
 
 
-class DatabaseError(SharedMemoryError):
+class DatabaseError(RipenError):
     """Raised when a database operation fails."""
 
     pass
@@ -16,25 +16,25 @@ class DatabaseLockedError(DatabaseError):
     pass
 
 
-class LockTimeoutError(SharedMemoryError):
+class LockTimeoutError(RipenError):
     """Raised when a cross-process lock cannot be acquired within the timeout."""
 
     pass
 
 
-class ValidationError(SharedMemoryError):
+class ValidationError(RipenError):
     """Raised when input data fails validation."""
 
     pass
 
 
-class ResourceNotFoundError(SharedMemoryError):
+class ResourceNotFoundError(RipenError):
     """Raised when a requested resource (snapshot, file, entity) is not found."""
 
     pass
 
 
-class SecurityError(SharedMemoryError):
+class SecurityError(RipenError):
     """Raised when a security-sensitive operation (like path traversal) is blocked."""
 
     pass

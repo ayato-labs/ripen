@@ -110,14 +110,33 @@ def server_process():
 
     # Start the server on a different port to avoid conflict
     process = subprocess.Popen(
-        [sys.executable, "-m", "ripen.api.server", "--port", "8378"],
+        [sys.executable, "-u", "-m", "ripen.api.server", "--port", "8378"],
         stdout=log_file,
-        stderr=log_file,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
         text=True,
         env=env
     )
     
-    time.sleep(10)
+    # Dynamic health check instead of fixed sleep
+    max_retries = 30
+    server_ready = False
+    for _ in range(max_retries):
+        if process.poll() is not None:
+            break
+        try:
+            response = httpx.get("http://localhost:8378/api/health", timeout=1.0)
+            if response.status_code == 200:
+                server_ready = True
+                break
+        except Exception:
+            time.sleep(1)
+
+    if not server_ready:
+        process.terminate()
+        log_file.close()
+        pytest.fail("Chaos server failed to start or health check failed.")
+
     yield process
     
     if process.poll() is None:

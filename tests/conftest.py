@@ -19,8 +19,8 @@ async def setup_teardown_db(request):
     logger.remove()
 
     # Standard path resolution for testing - Use a more specific prefix
-    home_dir = tempfile.mkdtemp(prefix="sm_test_")
-    os.environ["SHARED_MEMORY_HOME"] = home_dir
+    home_dir = tempfile.mkdtemp(prefix="ripen_test_")
+    os.environ["RIPEN_HOME"] = home_dir
     os.environ["MEMORY_DB_PATH"] = os.path.join(home_dir, "knowledge.db")
     os.environ["THOUGHTS_DB_PATH"] = os.path.join(home_dir, "thoughts.db")
     os.environ["MEMORY_BANK_DIR"] = os.path.join(home_dir, "bank")

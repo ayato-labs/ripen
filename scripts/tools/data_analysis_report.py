@@ -21,7 +21,7 @@ def deep_data_analysis():
     conn.row_factory = sqlite3.Row
 
     print("=" * 60)
-    print(" RIPEN (ex SharedMemory) - PRODUCTION DATA ANALYSIS REPORT")
+    print(" RIPEN KNOWLEDGE HUB - PRODUCTION DATA ANALYSIS REPORT")
     print("=" * 60)
 
     # 1. Entity Statistics

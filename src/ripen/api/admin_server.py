@@ -5,7 +5,7 @@ from ripen.infra.database import init_db
 from ripen.infra.uow import SecureWriteContext, UnitOfWork
 
 # Create MCP server instance (Control Plane / Admin)
-mcp = FastMCP("SharedMemoryAdminServer")
+mcp = FastMCP("RipenAdminServer")
 
 from ripen.api.auth import get_current_user
 from ripen.common.utils import get_logger
