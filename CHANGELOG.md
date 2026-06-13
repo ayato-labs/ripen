@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.22.1 (2026-06-13)
+
+### Bug Fixes
+
+- Add wait_for_previous argument to MCP tool signatures to satisfy strict client validation
+  ([`a15e2af`](https://github.com/ayato-labs/ripen/commit/a15e2af75e040418f640cebf13ede41a81d6ab3e))
+
+- Make save_memory arguments optional for better robustness
+  ([`d9a0ad9`](https://github.com/ayato-labs/ripen/commit/d9a0ad9ea676ce9a109343e6ad8b1c17eb2d3498))
+
+- Resolve MCP tool validation errors and sequential thinking issues
+  ([`a15e2af`](https://github.com/ayato-labs/ripen/commit/a15e2af75e040418f640cebf13ede41a81d6ab3e))
+
+### Code Style
+
+- Fix linting errors (ARG001, E501, B006)
+  ([`ed6fbb8`](https://github.com/ayato-labs/ripen/commit/ed6fbb8d00579ca6cbb2b01ce5220d12400f917e))
+
+### Testing
+
+- Add scratch scripts for validating FastMCP tool argument handling and update project documentation
+  ([`72fe4ef`](https://github.com/ayato-labs/ripen/commit/72fe4ef8c9f8e7138c00eaa88c05582b508b2885))
+
+
 ## v1.22.0 (2026-06-13)
 
 
