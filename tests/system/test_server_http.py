@@ -43,7 +43,31 @@ def server_process():
     )
     
     # Wait for the server to start and listen on port
-    time.sleep(10)
+    max_retries = 30
+    retry_interval = 1
+    server_ready = False
+    
+    for attempt in range(max_retries):
+        if process.poll() is not None:
+            log_file.close()
+            with open(log_file_path, encoding="utf-8") as f:
+                logs = f.read()
+            pytest.fail(f"Server process died unexpectedly with code {process.returncode}. Logs:\n{logs}")
+            
+        try:
+            # We use a simple HTTP GET to check if the server is responding
+            response = httpx.get("http://localhost:8377/dashboard/", timeout=1.0)
+            if response.status_code in [200, 307, 401, 404]:
+                server_ready = True
+                break
+        except Exception:
+            time.sleep(retry_interval)
+            
+    if not server_ready:
+        log_file.close()
+        with open(log_file_path, encoding="utf-8") as f:
+            logs = f.read()
+        pytest.fail(f"Server failed to start and respond after {max_retries} seconds. Logs:\n{logs}")
     
     yield process
     
