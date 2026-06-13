@@ -140,6 +140,7 @@ async def save_memory(
     observations: list[dict],
     bank_files: list[str] | None = None,
     agent_id: str | None = None,
+    wait_for_previous: bool | None = None,
 ) -> str:
     """
     Persists knowledge to the long-term memory hub.
@@ -163,7 +164,7 @@ async def save_memory(
         return f"Error: {e}"
 
 @mcp.tool()
-async def read_memory(query: str = "") -> str:
+async def read_memory(query: str = "", wait_for_previous: bool | None = None) -> str:
     """
     Retrieves relevant knowledge from the memory hub using hybrid search.
     Use this to gather context about entities, relations, and past observations.
@@ -185,6 +186,7 @@ async def sequential_thinking(
     branch_from_thought: int | None = None,
     branch_id: str | None = None,
     is_revision: bool = False,
+    wait_for_previous: bool | None = None,
 ) -> str:
     """
     A tool for complex reasoning. Allows the agent to iterate through thoughts,
@@ -211,7 +213,7 @@ async def sequential_thinking(
         return f"Thinking Error: {e}"
 
 @mcp.tool()
-async def synthesize_entity(entity_name: str) -> str:
+async def synthesize_entity(entity_name: str, wait_for_previous: bool | None = None) -> str:
     """Generate a synthesized summary of an entity based on all known observations and relations."""
     summary = await logic_module.synthesize_entity(entity_name)
     return json.dumps(summary, indent=2, ensure_ascii=False)
@@ -222,6 +224,7 @@ async def save_troubleshooting_knowledge(
     solution: str,
     affected_functions: list[str] | None = None,
     env_metadata: dict | None = None,
+    wait_for_previous: bool | None = None,
 ) -> str:
     """Save troubleshooting knowledge to help future agents solve similar issues."""
     return await logic_module.save_troubleshooting_knowledge_core(
@@ -229,32 +232,32 @@ async def save_troubleshooting_knowledge(
     )
 
 @mcp.tool()
-async def get_graph_data(_query: str | None = None) -> str:
+async def get_graph_data(_query: str | None = None, wait_for_previous: bool | None = None) -> str:
     """Retrieve raw graph data (nodes and edges) for visualization or deep analysis."""
     data = await graph_module.get_graph_data()
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 @mcp.tool()
-async def manage_knowledge_activation(ids: list[str] | str, status: str) -> str:
+async def manage_knowledge_activation(ids: list[str] | str, status: str, wait_for_previous: bool | None = None) -> str:
     """Govern the 'Maturity' and 'Activation' of knowledge.
     Use this to manually activate important patterns or archive transient noise."""
     await logic_module.manage_knowledge_activation_core(ids, status)
     return f"Status updated to {status}."
 
 @mcp.tool()
-async def list_inactive_knowledge() -> list[dict]:
+async def list_inactive_knowledge(wait_for_previous: bool | None = None) -> list[dict]:
     """List archived or low-maturity knowledge.
     Use this to review what has been filtered out and identify if any critical
     information needs to be 're-activated'."""
     return await logic_module.list_inactive_knowledge_core()
 
 @mcp.tool()
-async def get_insights(format: str = "markdown") -> str:
+async def get_insights(format: str = "markdown", wait_for_previous: bool | None = None) -> str:
     """Generate a high-level value report and ROI of the memory system."""
     return await logic_module.get_value_report_core(format_type=format)
 
 @mcp.tool()
-async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False) -> str:
+async def admin_run_knowledge_gc(age_days: int = 180, dry_run: bool = False, wait_for_previous: bool | None = None) -> str:
     """System maintenance: Garbage collection.
     Trigger this to purge ancient, unused knowledge and maintain system performance."""
     return await logic_module.admin_run_knowledge_gc_core(age_days, dry_run)
