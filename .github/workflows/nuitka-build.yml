@@ -71,7 +71,6 @@ jobs:
             --windows-icon-from-ico=logo.ico `
             --output-dir=dist-nuitka `
             --output-filename=$build_name `
-            --jobs=2 `
             src/ripen/api/server.py
 
       - name: Build RipenInit with Nuitka
@@ -87,7 +86,6 @@ jobs:
             --windows-icon-from-ico=logo.ico `
             --output-dir=dist-nuitka `
             --output-filename=$build_name `
-            --jobs=2 `
             src/ripen/cli/init.py
 
       - name: Get Latest Tag
