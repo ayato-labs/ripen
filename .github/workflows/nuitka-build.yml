@@ -75,7 +75,7 @@ jobs:
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $suffix = if ("${{ github.ref }}" -eq "refs/heads/main") { "" } else { "-dev" }
-          $build_name = "Ripen-$tag$suffix-windows-x86_64"
+          $build_name = "Ripen-$tag$suffix-windows-x86_64.exe"
           
           uv run python -m nuitka `
             --onefile `
@@ -100,7 +100,7 @@ jobs:
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $suffix = if ("${{ github.ref }}" -eq "refs/heads/main") { "" } else { "-dev" }
-          $build_name = "RipenInit-$tag$suffix-windows-x86_64"
+          $build_name = "RipenInit-$tag$suffix-windows-x86_64.exe"
           
           uv run python -m nuitka `
             --onefile `
@@ -116,6 +116,12 @@ jobs:
             --output-filename=$build_name `
             src/ripen/cli/init.py
 
+      - name: Debug - List Built Files
+        shell: pwsh
+        run: |
+          echo "Listing files in dist-nuitka:"
+          ls dist-nuitka/
+
       - name: Upload Nuitka Binaries to Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -123,7 +129,7 @@ jobs:
           files: |
             dist-nuitka/*.exe
           tag_name: ${{ steps.tag.outputs.tag }}
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
           append_body: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
