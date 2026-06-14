@@ -52,20 +52,22 @@ jobs:
       - name: Cache Nuitka Build
         uses: actions/cache@v4
         with:
-          path: |
-            ~\AppData\Local\Nuitka\Nuitka\Cache
-          key: ${{ runner.os }}-nuitka-${{ hashFiles('**/pyproject.toml') }}
+          path: .nuitka-cache
+          key: ${{ runner.os }}-nuitka-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-nuitka-
 
       - name: Build Ripen with Nuitka
         shell: pwsh
+        env:
+          NUITKA_ASSUME_YES: 1
         run: |
           $build_name = if ("${{ github.ref }}" -eq "refs/heads/main") { "Ripen-nuitka" } else { "Ripen-nuitka-dev" }
           uv run python -m nuitka `
             --onefile `
             --standalone `
             --assume-yes-for-downloads `
+            --nofollow-import-to=pytest `
             --include-distribution-metadata=ripen `
             --include-distribution-metadata=fastmcp `
             --include-package-data=fastembed `
@@ -77,12 +79,15 @@ jobs:
 
       - name: Build RipenInit with Nuitka
         shell: pwsh
+        env:
+          NUITKA_ASSUME_YES: 1
         run: |
           $build_name = if ("${{ github.ref }}" -eq "refs/heads/main") { "RipenInit-nuitka" } else { "RipenInit-nuitka-dev" }
           uv run python -m nuitka `
             --onefile `
             --standalone `
             --assume-yes-for-downloads `
+            --nofollow-import-to=pytest `
             --include-distribution-metadata=ripen `
             --include-distribution-metadata=fastmcp `
             --windows-icon-from-ico=logo.ico `
