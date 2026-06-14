@@ -63,6 +63,7 @@ jobs:
           uv run python -m nuitka `
             --onefile `
             --standalone `
+            --assume-yes-for-downloads `
             --include-distribution-metadata=ripen `
             --include-distribution-metadata=fastmcp `
             --include-package=fastembed `
@@ -80,6 +81,7 @@ jobs:
           uv run python -m nuitka `
             --onefile `
             --standalone `
+            --assume-yes-for-downloads `
             --include-distribution-metadata=ripen `
             --include-distribution-metadata=fastmcp `
             --windows-icon-from-ico=logo.ico `
