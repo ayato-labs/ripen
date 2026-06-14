@@ -57,12 +57,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuitka-
 
+      - name: Get Latest Tag
+        id: tag
+        shell: bash
+        run: |
+          git fetch --tags
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$TAG" ]; then
+            TAG=$(git rev-parse --short HEAD)
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: Build Ripen with Nuitka
         shell: pwsh
         env:
           NUITKA_ASSUME_YES: 1
         run: |
-          $build_name = if ("${{ github.ref }}" -eq "refs/heads/main") { "Ripen-nuitka" } else { "Ripen-nuitka-dev" }
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $suffix = if ("${{ github.ref }}" -eq "refs/heads/main") { "" } else { "-dev" }
+          $build_name = "Ripen-$tag$suffix-windows-x86_64"
+          
           uv run python -m nuitka `
             --onefile `
             --standalone `
@@ -84,7 +98,10 @@ jobs:
         env:
           NUITKA_ASSUME_YES: 1
         run: |
-          $build_name = if ("${{ github.ref }}" -eq "refs/heads/main") { "RipenInit-nuitka" } else { "RipenInit-nuitka-dev" }
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $suffix = if ("${{ github.ref }}" -eq "refs/heads/main") { "" } else { "-dev" }
+          $build_name = "RipenInit-$tag$suffix-windows-x86_64"
+          
           uv run python -m nuitka `
             --onefile `
             --standalone `
@@ -99,24 +116,12 @@ jobs:
             --output-filename=$build_name `
             src/ripen/cli/init.py
 
-      - name: Get Latest Tag
-        id: tag
-        shell: bash
-        run: |
-          git fetch --tags
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$TAG" ]; then
-            TAG=$(git rev-parse --short HEAD)
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
       - name: Upload Nuitka Binaries to Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         with:
           files: |
-            dist-nuitka/Ripen-nuitka.exe
-            dist-nuitka/RipenInit-nuitka.exe
+            dist-nuitka/*.exe
           tag_name: ${{ steps.tag.outputs.tag }}
           fail_on_unmatched_files: false
           append_body: true
