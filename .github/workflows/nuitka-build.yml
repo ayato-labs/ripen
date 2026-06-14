@@ -70,6 +70,8 @@ jobs:
             --nofollow-import-to=pytest `
             --include-distribution-metadata=ripen `
             --include-distribution-metadata=fastmcp `
+            --include-package=ripen `
+            --include-package=fastmcp `
             --include-package-data=fastembed `
             --include-package-data=faiss `
             --windows-icon-from-ico=logo.ico `
@@ -90,6 +92,8 @@ jobs:
             --nofollow-import-to=pytest `
             --include-distribution-metadata=ripen `
             --include-distribution-metadata=fastmcp `
+            --include-package=ripen `
+            --include-package=fastmcp `
             --windows-icon-from-ico=logo.ico `
             --output-dir=dist-nuitka `
             --output-filename=$build_name `
