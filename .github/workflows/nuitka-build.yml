@@ -1,0 +1,122 @@
+name: Nuitka Build (Windows)
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'LICENSE'
+      - 'COMMERCIAL.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'LICENSE'
+      - 'COMMERCIAL.md'
+      - '.gitignore'
+
+permissions:
+  contents: write
+
+jobs:
+  nuitka_build:
+    name: Build Windows Assets with Nuitka
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.11'
+          enable-cache: true
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ ! -d ".venv" ]; then uv venv; fi
+          uv pip install -e .
+          uv pip install nuitka zstandard
+
+      - name: Cache Nuitka Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-
+
+      - name: Build Ripen with Nuitka
+        shell: pwsh
+        run: |
+          $build_name = if ("${{ github.ref }}" -eq "refs/heads/main") { "Ripen-nuitka" } else { "Ripen-nuitka-dev" }
+          uv run python -m nuitka `
+            --onefile `
+            --standalone `
+            --include-distribution-metadata=ripen `
+            --include-distribution-metadata=fastmcp `
+            --include-package=fastembed `
+            --include-package=faiss `
+            --windows-icon-from-ico=logo.ico `
+            --output-dir=dist-nuitka `
+            --output-filename=$build_name `
+            --jobs=2 `
+            src/ripen/api/server.py
+
+      - name: Build RipenInit with Nuitka
+        shell: pwsh
+        run: |
+          $build_name = if ("${{ github.ref }}" -eq "refs/heads/main") { "RipenInit-nuitka" } else { "RipenInit-nuitka-dev" }
+          uv run python -m nuitka `
+            --onefile `
+            --standalone `
+            --include-distribution-metadata=ripen `
+            --include-distribution-metadata=fastmcp `
+            --windows-icon-from-ico=logo.ico `
+            --output-dir=dist-nuitka `
+            --output-filename=$build_name `
+            --jobs=2 `
+            src/ripen/cli/init.py
+
+      - name: Get Latest Tag
+        id: tag
+        shell: bash
+        run: |
+          git fetch --tags
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$TAG" ]; then
+            TAG=$(git rev-parse --short HEAD)
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Upload Nuitka Binaries to Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        with:
+          files: |
+            dist-nuitka/Ripen-nuitka.exe
+            dist-nuitka/RipenInit-nuitka.exe
+          tag_name: ${{ steps.tag.outputs.tag }}
+          fail_on_unmatched_files: false
+          append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Nuitka Binaries as Artifacts (Non-Release / Dev)
+        uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/main'
+        with:
+          name: ripen-nuitka-binaries-${{ github.sha }}
+          path: |
+            dist-nuitka/*.exe
+          retention-days: 7
