@@ -25,6 +25,8 @@ jobs:
   nuitka_build:
     name: Build Windows Assets with Nuitka
     runs-on: windows-latest
+    env:
+      NUITKA_CACHE_DIR: ${{ github.workspace }}\.nuitka-cache
     steps:
       - uses: actions/checkout@v4
         with:
