@@ -167,16 +167,34 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
     )
 
     try:
-        all_rows = await uow.embeddings.get_all_embeddings()
+        try:
+            all_rows = await uow.embeddings.get_all_embeddings()
+        except Exception as e:
+            logger.error(f"Failed to fetch embeddings: {e}")
+            all_rows = []
 
-        query_vector = await task_vector
-        keyword_results = await task_keyword
+        try:
+            query_vector = await task_vector
+        except Exception as e:
+            logger.error(f"Vector computation failed: {e}")
+            query_vector = None
+
+        try:
+            keyword_results = await task_keyword
+        except Exception as e:
+            logger.error(f"Keyword search failed: {e}")
+            keyword_results = []
 
         if not query_vector or not all_rows:
             logger.debug(
                 f"Embed search skipped or not available. "
                 f"query_vector={bool(query_vector)}, all_rows={len(all_rows) if all_rows else 0}"
             )
+            # Even if embedding fails, we still want to return keyword results if they exist
+            if keyword_results:
+                top_cids = [r["id"] for r in keyword_results[:limit]]
+                graph_data, bank_data = await _fetch_search_data(top_cids, uow)
+                return graph_data, bank_data
             return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
 
         all_cids = [r["content_id"] for r in all_rows]
@@ -226,9 +244,7 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
         for cid in top_cids:
             await uow.metadata.update_access(cid)
 
-        graph_task = asyncio.create_task(get_graph_data_by_cids(top_cids, uow))
-        bank_task = asyncio.create_task(get_bank_data_by_cids(top_cids, uow))
-        graph_data, bank_data = await asyncio.gather(graph_task, bank_task)
+        graph_data, bank_data = await _fetch_search_data(top_cids, uow)
 
         dur = (datetime.datetime.now() - start_search).total_seconds()
         logger.info(f"perform_search COMPLETE query={query} duration={dur:.3f}s")
@@ -238,7 +254,27 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
 
     except Exception as e:
         log_error(f"Search failed for query: {query}", e)
+        # Ensure tasks are cleaned up on unhandled error
+        for t in [task_vector, task_keyword]:
+            if not t.done():
+                t.cancel()
         return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
+
+
+async def _fetch_search_data(cids: list[str], uow):
+    """Helper to fetch graph and bank data in parallel."""
+    graph_task = asyncio.create_task(get_graph_data_by_cids(cids, uow))
+    bank_task = asyncio.create_task(get_bank_data_by_cids(cids, uow))
+    try:
+        return await asyncio.gather(graph_task, bank_task)
+    except Exception as e:
+        logger.error(f"Failed to fetch search data: {e}")
+        # Cleanup
+        for t in [graph_task, bank_task]:
+            if not t.done():
+                t.cancel()
+        return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
+
 
 
 async def get_graph_data_by_cids(cids: list[str], uow):

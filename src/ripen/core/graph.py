@@ -214,10 +214,13 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
     existing = await uow.observations.get_recent_observations(entity_name, limit=5)
 
     if not existing:
+        logger.debug(f"No existing knowledge found for '{entity_name}'. Skipping conflict check.")
         return [(False, None)] * len(new_contents)
 
     existing_text = "\n".join([f"- {row}" for row in existing])
     new_text_numbered = "\n".join([f"{i}. {content}" for i, content in enumerate(new_contents)])
+
+    logger.debug(f"Conflict check for '{entity_name}': Comparing {len(new_contents)} new items against {len(existing)} existing items.")
 
     prompt = (
         "You are a Fact-Checking Engine. Check if any of the following NEW statements "
@@ -237,6 +240,8 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
         response_text = await provider.generate_content(
             prompt=prompt, system_instruction=system_instruction
         )
+        logger.debug(f"AI Conflict Response for '{entity_name}': {response_text}")
+        
         clean_json = re.sub(r"```json|```", "", response_text).strip()
         data = json.loads(clean_json)
 
@@ -244,9 +249,11 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
         if isinstance(data, list) and len(data) == len(new_contents):
             results = data
         elif isinstance(data, dict):
+            # Handle case where AI returns a single object instead of a list
             results = [data] * len(new_contents)
 
         if not results:
+            logger.warning(f"AI returned empty results for conflict check on '{entity_name}'")
             return [(False, None)] * len(new_contents)
 
         final_results = []
@@ -262,7 +269,7 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
                 )
         return final_results
     except Exception as e:
-        log_error("Conflict check failed during AI call", e)
+        log_error(f"Conflict check failed during AI call for '{entity_name}'", e)
         # Record failure as a conflict so a human can decide
         reason = f"Conflict check failed (AI error): {e}"
         for content in new_contents:
@@ -270,6 +277,7 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
                 entity_name, existing_text, content, reason, agent_id
             )
         return [(True, reason)] * len(new_contents)
+
 
 
 async def search_by_tags(tags: list[str], uow) -> list[str]:
