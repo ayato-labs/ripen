@@ -262,14 +262,6 @@ async def _wait_for_task(task, label):
         logger.error(f"{label} failed: {e}")
         return None
 
-    except Exception as e:
-        log_error(f"Search failed for query: {query}", e)
-        # Ensure tasks are cleaned up on unhandled error
-        for t in [task_vector, task_keyword]:
-            if not t.done():
-                t.cancel()
-        return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
-
 
 async def _fetch_search_data(cids: list[str], uow):
     """Helper to fetch graph and bank data in parallel."""
