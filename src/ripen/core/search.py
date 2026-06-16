@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import re
+from typing import Any
 
 from ripen.common.utils import (
     batch_cosine_similarity,
@@ -173,6 +174,37 @@ def _calculate_hybrid_score(
     return ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
 
 
+def _rank_results(
+    all_cids, similarities, keyword_results, meta_map, limit
+) -> list[str]:
+    """Rank results using hybrid scoring (semantic + keyword + importance)."""
+    results = []
+    seen_cids = set()
+
+    for i, cid in enumerate(all_cids):
+        sim = float(similarities[i])
+        count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
+        importance = calculate_importance(count, last)
+        score = _calculate_hybrid_score(cid, sim, importance, keyword_results)
+        results.append((cid, score))
+        seen_cids.add(cid)
+
+    # Add keyword results not present in semantic results
+    for res in keyword_results:
+        cid = res["id"]
+        if cid not in seen_cids:
+            count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
+            importance = calculate_importance(count, last)
+            # For keyword-only, we treat similarity as 0
+            score = _calculate_hybrid_score(cid, 0.0, importance, keyword_results)
+            results.append((cid, score))
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    # Only return results with a minimum score threshold
+    top_results = [r for r in results[:limit] if r[1] > 0.03]
+    return [r[0] for r in top_results]
+
+
 async def perform_search(query: str, uow, limit: int = 10, include_transient: bool = True):
     """Hybrid search logic (Semantic + Keyword)."""
     logger.info(f"perform_search START query={query}")
@@ -211,30 +243,7 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
         metadata_rows = await uow.metadata.get_all_metadata()
         meta_map = {m["content_id"]: (m["access_count"], m["last_accessed"]) for m in metadata_rows}
 
-        results = []
-        seen_cids = set()
-
-        for i, cid in enumerate(all_cids):
-            sim = float(similarities[i])
-            count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
-            importance = calculate_importance(count, last)
-            score = _calculate_hybrid_score(cid, sim, importance, keyword_results)
-            results.append((cid, score))
-            seen_cids.add(cid)
-
-        # Add keyword results not present in semantic results
-        for res in keyword_results:
-            cid = res["id"]
-            if cid not in seen_cids:
-                count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
-                importance = calculate_importance(count, last)
-                # For keyword-only, we treat similarity as 0
-                score = _calculate_hybrid_score(cid, 0.0, importance, keyword_results)
-                results.append((cid, score))
-
-        results.sort(key=lambda x: x[1], reverse=True)
-        top_results = [r for r in results[:limit] if r[1] > 0.03]
-        top_cids = [r[0] for r in top_results]
+        top_cids = _rank_results(all_cids, similarities, keyword_results, meta_map, limit)
 
         for cid in top_cids:
             await uow.metadata.update_access(cid)
@@ -243,7 +252,7 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
 
         dur = (datetime.datetime.now() - start_search).total_seconds()
         logger.info(f"perform_search COMPLETE query={query} duration={dur:.3f}s")
-        await uow.metadata.log_search_stat(query, len(top_results), hit_ids=top_cids)
+        await uow.metadata.log_search_stat(query, len(top_cids), hit_ids=top_cids)
         return graph_data, bank_data
 
     except Exception as e:
