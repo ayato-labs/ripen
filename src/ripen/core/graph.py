@@ -220,7 +220,10 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
     existing_text = "\n".join([f"- {row}" for row in existing])
     new_text_numbered = "\n".join([f"{i}. {content}" for i, content in enumerate(new_contents)])
 
-    logger.debug(f"Conflict check for '{entity_name}': Comparing {len(new_contents)} new items against {len(existing)} existing items.")
+    logger.debug(
+        f"Conflict check for '{entity_name}': "
+        f"Comparing {len(new_contents)} new items against {len(existing)} existing items."
+    )
 
     prompt = (
         "You are a Fact-Checking Engine. Check if any of the following NEW statements "

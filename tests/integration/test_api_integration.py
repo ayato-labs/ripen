@@ -28,15 +28,22 @@ async def test_save_and_hybrid_search_flow(uow):
     # 2. 検索 (キーワード + セマンティック)
     log.info("Step 2: Performing hybrid search...")
     graph_data, bank_data = await search.perform_search("Integration", uow)
-    log.info(f"Search results: graph_entities={len(graph_data['entities'])}, bank_files={len(bank_data)}")
+    log.info(
+        f"Search results: graph_entities={len(graph_data['entities'])}, "
+        f"bank_files={len(bank_data)}"
+    )
 
     # エンティティが見つかっているか
     entity_names = [e["name"] for e in graph_data["entities"]]
-    assert "IntegrationNode" in entity_names, f"IntegrationNode not found in {entity_names}. Graph data: {graph_data}"
+    assert "IntegrationNode" in entity_names, (
+        f"IntegrationNode not found in {entity_names}. Graph data: {graph_data}"
+    )
 
     # 観察が含まれているか
     obs_contents = [o["content"] for o in graph_data["observations"]]
-    assert "Integration testing is crucial" in obs_contents, f"Observation not found in {obs_contents}"
+    assert "Integration testing is crucial" in obs_contents, (
+        f"Observation not found in {obs_contents}"
+    )
 
     # バンクファイルが含まれているか
     assert "integration.md" in bank_data, f"integration.md not found in {bank_data.keys()}"
