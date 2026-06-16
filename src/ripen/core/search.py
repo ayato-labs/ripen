@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import re
+from typing import Any
 
 from ripen.common.utils import (
     batch_cosine_similarity,
@@ -156,6 +157,54 @@ async def perform_keyword_search(
     return formatted_results
 
 
+def _calculate_hybrid_score(
+    cid: str,
+    sim: float,
+    importance: float,
+    keyword_results: list[dict[str, Any]],
+) -> float:
+    """Helper to calculate hybrid score for a content item."""
+    k_res = next((r for r in keyword_results if r["id"] == cid), None)
+    k_score = k_res["score"] if k_res else 0.0
+
+    maturity = k_res["maturity"] if k_res else "STABLE"
+    maturity_boost = 1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
+
+    # Weights: Semantic(40%), Importance(15%), Keyword(45%)
+    return ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
+
+
+def _rank_results(
+    all_cids, similarities, keyword_results, meta_map, limit
+) -> list[str]:
+    """Rank results using hybrid scoring (semantic + keyword + importance)."""
+    results = []
+    seen_cids = set()
+
+    for i, cid in enumerate(all_cids):
+        sim = float(similarities[i])
+        count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
+        importance = calculate_importance(count, last)
+        score = _calculate_hybrid_score(cid, sim, importance, keyword_results)
+        results.append((cid, score))
+        seen_cids.add(cid)
+
+    # Add keyword results not present in semantic results
+    for res in keyword_results:
+        cid = res["id"]
+        if cid not in seen_cids:
+            count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
+            importance = calculate_importance(count, last)
+            # For keyword-only, we treat similarity as 0
+            score = _calculate_hybrid_score(cid, 0.0, importance, keyword_results)
+            results.append((cid, score))
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    # Only return results with a minimum score threshold
+    top_results = [r for r in results[:limit] if r[1] > 0.03]
+    return [r[0] for r in top_results]
+
+
 async def perform_search(query: str, uow, limit: int = 10, include_transient: bool = True):
     """Hybrid search logic (Semantic + Keyword)."""
     logger.info(f"perform_search START query={query}")
@@ -167,16 +216,24 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
     )
 
     try:
-        all_rows = await uow.embeddings.get_all_embeddings()
+        try:
+            all_rows = await uow.embeddings.get_all_embeddings()
+        except Exception as e:
+            logger.error(f"Failed to fetch embeddings: {e}")
+            all_rows = []
 
-        query_vector = await task_vector
-        keyword_results = await task_keyword
+        query_vector = await _wait_for_task(task_vector, "Vector computation")
+        keyword_results = await _wait_for_task(task_keyword, "Keyword search")
 
         if not query_vector or not all_rows:
             logger.debug(
-                f"Embed search skipped or not available. "
-                f"query_vector={bool(query_vector)}, all_rows={len(all_rows) if all_rows else 0}"
+                f"Embed search skipped. query_vector={bool(query_vector)}, "
+                f"all_rows={len(all_rows) if all_rows else 0}"
             )
+            if keyword_results:
+                top_cids = [r["id"] for r in keyword_results[:limit]]
+                graph_data, bank_data = await _fetch_search_data(top_cids, uow)
+                return graph_data, bank_data
             return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
 
         all_cids = [r["content_id"] for r in all_rows]
@@ -186,59 +243,49 @@ async def perform_search(query: str, uow, limit: int = 10, include_transient: bo
         metadata_rows = await uow.metadata.get_all_metadata()
         meta_map = {m["content_id"]: (m["access_count"], m["last_accessed"]) for m in metadata_rows}
 
-        results = []
-        seen_cids = set()
-
-        for i, cid in enumerate(all_cids):
-            sim = float(similarities[i])
-            count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
-            importance = calculate_importance(count, last)
-            k_res = next((r for r in keyword_results if r["id"] == cid), None)
-            k_score = k_res["score"] if k_res else 0.0
-
-            maturity = k_res["maturity"] if k_res else "STABLE"
-            maturity_boost = (
-                1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
-            )
-
-            final_score = ((sim * 0.4) + (importance * 0.15) + (k_score * 0.45)) * maturity_boost
-            results.append((cid, final_score))
-            seen_cids.add(cid)
-
-        for res in keyword_results:
-            cid = res["id"]
-            if cid not in seen_cids:
-                k_score = res["score"]
-                maturity = res["maturity"]
-                maturity_boost = (
-                    1.5 if maturity == "STABLE" else (0.3 if maturity == "TRANSIENT" else 1.0)
-                )
-
-                count, last = meta_map.get(cid, (0, datetime.datetime.now().isoformat()))
-                importance = calculate_importance(count, last)
-                final_score = ((k_score * 0.5) + (importance * 0.5)) * maturity_boost
-                results.append((cid, final_score))
-
-        results.sort(key=lambda x: x[1], reverse=True)
-        top_results = [r for r in results[:limit] if r[1] > 0.03]
-        top_cids = [r[0] for r in top_results]
+        top_cids = _rank_results(all_cids, similarities, keyword_results, meta_map, limit)
 
         for cid in top_cids:
             await uow.metadata.update_access(cid)
 
-        graph_task = asyncio.create_task(get_graph_data_by_cids(top_cids, uow))
-        bank_task = asyncio.create_task(get_bank_data_by_cids(top_cids, uow))
-        graph_data, bank_data = await asyncio.gather(graph_task, bank_task)
+        graph_data, bank_data = await _fetch_search_data(top_cids, uow)
 
         dur = (datetime.datetime.now() - start_search).total_seconds()
         logger.info(f"perform_search COMPLETE query={query} duration={dur:.3f}s")
-
-        await uow.metadata.log_search_stat(query, len(top_results), hit_ids=top_cids)
+        await uow.metadata.log_search_stat(query, len(top_cids), hit_ids=top_cids)
         return graph_data, bank_data
 
     except Exception as e:
         log_error(f"Search failed for query: {query}", e)
+        for t in [task_vector, task_keyword]:
+            if not t.done():
+                t.cancel()
         return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
+
+
+async def _wait_for_task(task, label):
+    """Helper to safely wait for an async task."""
+    try:
+        return await task
+    except Exception as e:
+        logger.error(f"{label} failed: {e}")
+        return None
+
+
+async def _fetch_search_data(cids: list[str], uow):
+    """Helper to fetch graph and bank data in parallel."""
+    graph_task = asyncio.create_task(get_graph_data_by_cids(cids, uow))
+    bank_task = asyncio.create_task(get_bank_data_by_cids(cids, uow))
+    try:
+        return await asyncio.gather(graph_task, bank_task)
+    except Exception as e:
+        logger.error(f"Failed to fetch search data: {e}")
+        # Cleanup
+        for t in [graph_task, bank_task]:
+            if not t.done():
+                t.cancel()
+        return {"entities": [], "relations": [], "observations": [], "troubleshooting": []}, {}
+
 
 
 async def get_graph_data_by_cids(cids: list[str], uow):

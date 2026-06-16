@@ -138,6 +138,9 @@ async def save_memory(
     entities: list[dict] | None = None,
     relations: list[dict] | None = None,
     observations: list[dict] | None = None,
+    entity: dict | list[dict] | None = None,
+    relation: dict | list[dict] | None = None,
+    observation: dict | list[dict] | None = None,
     bank_files: list[str] | None = None,
     agent_id: str | None = None,
     wait_for_previous: bool | None = None,  # noqa: ARG001
@@ -149,6 +152,24 @@ async def save_memory(
     entities = entities or []
     relations = relations or []
     observations = observations or []
+
+    if entity:
+        if isinstance(entity, list):
+            entities.extend(entity)
+        else:
+            entities.append(entity)
+
+    if relation:
+        if isinstance(relation, list):
+            relations.extend(relation)
+        else:
+            relations.append(relation)
+
+    if observation:
+        if isinstance(observation, list):
+            observations.extend(observation)
+        else:
+            observations.append(observation)
 
     logger.info(
         f"Tool called: save_memory (Entities: {len(entities)}, Relations: {len(relations)})"
