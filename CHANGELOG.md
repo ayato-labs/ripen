@@ -2,6 +2,63 @@
 
 <!-- version list -->
 
+## v1.23.0 (2026-06-16)
+
+### Bug Fixes
+
+- **ci**: Add --assume-yes-for-downloads to nuitka build
+  ([`6a2872a`](https://github.com/ayato-labs/ripen/commit/6a2872af69be65d963bfd1199600e081f05a9135))
+
+- **ci**: Improve Nuitka build stability and efficiency
+  ([`7fcd201`](https://github.com/ayato-labs/ripen/commit/7fcd20191b28c438a48ab3756e73694e2f319b5e))
+
+- **ci**: Optimize nuitka build to prevent memory exhaustion
+  ([`5431c57`](https://github.com/ayato-labs/ripen/commit/5431c5735ab424ff34bb6309d7c0b5d7134af719))
+
+- **lint**: Remove redundant and incorrect exception handler in _wait_for_task
+  ([`8551004`](https://github.com/ayato-labs/ripen/commit/8551004d22897f483191e7b9e7ed50729226b9d7))
+
+- **lint**: Resolve Ruff errors (E501, C901) and refactor search logic
+  ([`5af368b`](https://github.com/ayato-labs/ripen/commit/5af368ba5c5bc7f7043ee23595dd63754b092d9c))
+
+- **lint**: Resolve undefined Any and reduce perform_search complexity
+  ([`7537b55`](https://github.com/ayato-labs/ripen/commit/7537b5519141c950cc951c282970376607078eb3))
+
+- **search**: Fix task leakage and improve robustness; add diagnostic logs for CI failures
+  ([`0854fed`](https://github.com/ayato-labs/ripen/commit/0854feda6f78b1f8bc6d0500d0021904b03ceb66))
+
+### Continuous Integration
+
+- Add GitHub Actions workflow to build and release Windows binaries using Nuitka
+  ([`bd37f8c`](https://github.com/ayato-labs/ripen/commit/bd37f8ca1cd57f1ad2a5a430b812ee5508163b7b))
+
+- Add GitHub Actions workflow to build Windows binaries using Nuitka
+  ([`09a1d3e`](https://github.com/ayato-labs/ripen/commit/09a1d3ea3b37b764ce5100eb8c66cff5bd72d8be))
+
+- Add GitHub Actions workflow to build Windows executables using Nuitka
+  ([`1db8e78`](https://github.com/ayato-labs/ripen/commit/1db8e782009b822251a33605ccfc357a6615f774))
+
+- Optimize Nuitka caching strategy with run_id and custom directory
+  ([`d1bc72c`](https://github.com/ayato-labs/ripen/commit/d1bc72c5d15424b4a3921e4f16d0bf43c27ad884))
+
+### Features
+
+- Add nuitka-build workflow and consolidate documentation
+  ([`84d7e1d`](https://github.com/ayato-labs/ripen/commit/84d7e1d01f04541ccb49736e0e5d974ed44ce8b5))
+
+- Add setup.bat and start.bat for uv environment
+  ([#188](https://github.com/ayato-labs/ripen/pull/188),
+  [`21a544b`](https://github.com/ayato-labs/ripen/commit/21a544ba797e1c6cf116ba78bb75040a8a9cd3a0))
+
+- Implement FastMCP server with lifecycle management and memory orchestration tools
+  ([`b50c832`](https://github.com/ayato-labs/ripen/commit/b50c832c58ae3c08059c4937d1b869057a5ed339))
+
+### Performance Improvements
+
+- **ci**: Remove --jobs=2 limit to accelerate Nuitka C compilation
+  ([`eb3b103`](https://github.com/ayato-labs/ripen/commit/eb3b10364130b0251280224c1c5ccaa7774fe189))
+
+
 ## v1.22.1 (2026-06-13)
 
 ### Bug Fixes
