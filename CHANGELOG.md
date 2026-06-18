@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.24.0 (2026-06-18)
+
+### Features
+
+- Add admin, test, and connection CLI tools and enhance batch script logging and functionality
+  ([`24edc94`](https://github.com/ayato-labs/ripen/commit/24edc9430d37e0606e817acad333ecdf43c88e3c))
+
+- Implement hybrid semantic and FTS5 keyword search engine with importance-based ranking
+  ([`068249f`](https://github.com/ayato-labs/ripen/commit/068249f92fe2a1613cb364b8cc41db2c68d93ebd))
+
+- Introduce bin directory with utility scripts and enhance CLI output formatting in setup and
+  startup scripts
+  ([`e091a29`](https://github.com/ayato-labs/ripen/commit/e091a29e09e71088234eb32ba8d9cb1c4455fa6e))
+
+
 ## v1.23.0 (2026-06-16)
 
 ### Bug Fixes
