@@ -2,9 +2,17 @@
 setlocal
 pushd "%~dp0.."
 
+echo ========================================
+echo   [Ripen] Connect to Remote Team Hub
+echo ========================================
 echo.
-echo [Ripen Client] Connect to Remote Team Hub
-echo ----------------------------------------
+
+if not exist .venv (
+    echo [ERROR] Virtual environment (.venv) not found.
+    echo Please run setup.bat in the root folder first.
+    pause
+    exit /b 1
+)
 
 set /p HUB_URL="Enter Hub URL (default: http://localhost:8377): "
 
@@ -14,14 +22,14 @@ if "%HUB_URL%"=="" (
 
 echo.
 echo Connecting to %HUB_URL% via Stdio Proxy...
-echo.
+echo ----------------------------------------
 
-:: Using python -m instead of uv run to avoid .exe locking issues on Windows
-.venv\Scripts\python.exe -m ripen.api.server --stdio --hub-url %HUB_URL%
+uv run python -m ripen.api.server --stdio --hub-url %HUB_URL%
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [ERROR] Proxy connection failed.
     pause
 )
+
 popd
