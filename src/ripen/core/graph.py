@@ -271,6 +271,9 @@ async def _check_conflicts_internal(entity_name: str, new_contents: list[str], a
                     entity_name, existing_text, new_contents[i], reason, agent_id
                 )
         return final_results
+    except ValueError as e:
+        logger.error(f"Conflict check skipped (LLM configuration error): {e}")
+        return [(False, None)] * len(new_contents)
     except Exception as e:
         log_error(f"Conflict check failed during AI call for '{entity_name}'", e)
         # Record failure as a conflict so a human can decide

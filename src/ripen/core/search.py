@@ -361,6 +361,9 @@ async def synthesize_knowledge(entity_name: str, uow):
             prompt=prompt, system_instruction=system_instruction
         )
         return summary
+    except ValueError as e:
+        logger.error(f"Synthesis skipped (LLM configuration error): {e}")
+        return f"[Synthesis Skipped] LLM configuration error: {e}"
     except Exception as e:
         logger.error(f"Synthesis failed for {entity_name}: {e}")
         return f"Error: {e}"
@@ -394,6 +397,9 @@ async def synthesize_entity_detailed(entity_name: str, observations: list[dict])
             prompt=prompt, system_instruction=system_instruction
         )
         return summary
+    except ValueError as e:
+        logger.error(f"Synthesis skipped (LLM configuration error): {e}")
+        return f"[Synthesis Skipped] LLM configuration error: {e}"
     except Exception as e:
         logger.error(f"Synthesis failed: {e}")
         return f"[Synthesis Error] {e!s}"

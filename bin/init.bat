@@ -3,7 +3,7 @@ setlocal
 pushd "%~dp0.."
 
 echo ========================================
-echo   [Ripen] Starting Admin CLI
+echo   [Ripen] Setup / Re-configure Wizard
 echo ========================================
 echo.
 
@@ -14,7 +14,17 @@ if not exist .venv (
     exit /b 1
 )
 
-uv run python -m ripen.cli.admin_cli
+:: Run the interactive initialization CLI
+uv run python -m ripen.cli.init
 
-popd
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Setup exited with error code %errorlevel%.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [Ripen] Configuration completed!
 pause
+popd
