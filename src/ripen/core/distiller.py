@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any
 
-from ripen.common.utils import get_logger, log_error, log_info
+from ripen.common.utils import get_logger, log_info
 from ripen.core import logic
 from ripen.core.ai_control import retry_on_ai_quota
 from ripen.infra.llm import get_llm_provider
@@ -99,9 +99,10 @@ async def auto_distill_knowledge(session_id: str, thought_history: list[dict[str
             f"{len(entities)} entities, {len(relations)} relations"
         )
 
-    except Exception as e:
+    except ValueError as e:
+        logger.error(f"Failed to distill knowledge (LLM configuration error): {e}")
+    except Exception:
         logger.exception(f"Failed to distill knowledge for session {session_id}")
-        log_error(f"Failed to distill knowledge for session {session_id}", e)
 
 
 @retry_on_ai_quota(max_retries=3)
@@ -154,6 +155,7 @@ async def incremental_distill_knowledge(session_id: str, thought: str):
                 agent_id=f"incremental_distiller_{session_id}",
             )
             log_info(f"Incremental Distill: Saved {len(entities) + len(observations)} atoms.")
-    except Exception as e:
+    except ValueError as e:
+        logger.error(f"Incremental distillation skipped (LLM configuration error): {e}")
+    except Exception:
         logger.exception(f"Incremental distillation failed for {session_id}")
-        log_error(f"Incremental distillation failed for {session_id}", e)

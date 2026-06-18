@@ -241,11 +241,14 @@ class OllamaProvider(LlmProvider):
                         "Please run 'ollama pull' or check README.md for setup."
                     )
                     logger.error(msg)
-                    raise RuntimeError(msg)
+                    raise ValueError(msg)
                 response.raise_for_status()
                 data = response.json()
                 logger.info(f"Ollama response received. Model: {self.model}")
                 return data.get("response", "")
+            except ValueError:
+                # Logged as 404 already, just raise it so callers know it's a validation issue
+                raise
             except httpx.ConnectError as e:
                 msg = "Could not connect to Ollama. Is it running? (Check 'ollama serve')"
                 logger.error(msg)
