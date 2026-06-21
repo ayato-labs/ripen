@@ -7,13 +7,7 @@ echo   [Ripen] Starting Streamable HTTP MCP Server
 echo ========================================
 echo.
 
-:: Check for .venv
-if not exist .venv (
-    echo [ERROR] Virtual environment (.venv) not found.
-    echo Please run setup.bat first to initialize the environment.
-    pause
-    exit /b 1
-)
+if not exist .venv goto ERR_NO_VENV
 
 set PORT=8377
 set HOST=127.0.0.1
@@ -38,15 +32,22 @@ echo.
 echo Starting Ripen Hub (Streamable HTTP) on %HOST%:%PORT%...
 echo ----------------------------------------
 
-:: Start server forcing HTTP transport mode
-uv run python -m ripen.api.server --http --port %PORT% --host %HOST%
-
-if %errorlevel% neq 0 (
-    echo.
-    echo [ERROR] Server exited with error code %errorlevel%.
-    pause
-    exit /b 1
-)
+.venv\Scripts\python -m ripen.api.server --http --port %PORT% --host %HOST%
+if errorlevel 1 goto ERR_SERVER
 
 popd
+exit /b 0
+
+:ERR_NO_VENV
+echo [ERROR] Virtual environment (.venv) not found.
+echo Please run setup.bat first to initialize the environment.
 pause
+popd
+exit /b 1
+
+:ERR_SERVER
+echo.
+echo [ERROR] Server exited with error code %errorlevel%.
+pause
+popd
+exit /b 1
