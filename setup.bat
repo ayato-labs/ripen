@@ -28,8 +28,8 @@ if not exist .venv (
 )
 
 :: Install in editable mode
-echo [Ripen] Installing dependencies...
-uv pip install -e .
+echo [Ripen] Installing dependencies (including dev and test)...
+uv pip install -e .[dev,test]
 
 if %errorlevel% neq 0 (
     echo [ERROR] Installation failed.
@@ -37,9 +37,16 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: Copy .env.example to .env if not exists
+if not exist .env (
+    if exist .env.example (
+        echo [Ripen] Creating .env file from .env.example...
+        copy .env.example .env >nul
+    )
+)
+
 echo.
 echo [Ripen] Setup completed successfully!
-echo You can now start the system using start.bat.
 echo.
 
 popd

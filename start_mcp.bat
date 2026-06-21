@@ -3,7 +3,7 @@ setlocal
 pushd "%~dp0"
 
 echo ========================================
-echo   [Ripen] Starting Hub Server
+echo   [Ripen] Starting Streamable HTTP MCP Server
 echo ========================================
 echo.
 
@@ -35,15 +35,15 @@ if errorlevel 2 (
 )
 
 echo.
-echo Starting Ripen Hub on %HOST%:%PORT%...
+echo Starting Ripen Hub (Streamable HTTP) on %HOST%:%PORT%...
 echo ----------------------------------------
 
-:: Using python -m with uv run to avoid locking .exe
-uv run python -m ripen.api.server --port %PORT% --host %HOST%
+:: Start server forcing HTTP transport mode
+uv run python -m ripen.api.server --http --port %PORT% --host %HOST%
 
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] System exited with error code %errorlevel%.
+    echo [ERROR] Server exited with error code %errorlevel%.
     pause
     exit /b 1
 )
